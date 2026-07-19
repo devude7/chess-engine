@@ -26,4 +26,13 @@ Board empty_board() {
     return board;
 }
 
+bool is_empty_square(const Board& board, int square) {
+    return is_empty(piece_at(board, square));
+}
+
+bool is_occupied_by(const Board& board, int square, Color color) {
+    Piece piece = piece_at(board, square);
+    return !is_empty(piece) && piece.color == color;
+}
+
 } 

@@ -13,6 +13,7 @@ add_library(chess_engine_core
     src/core/move.cpp
     src/board/board.cpp
     src/board/fen.cpp
+    src/movegen/move_generator.cpp
 )
 
 target_include_directories(chess_engine_core

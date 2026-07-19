@@ -26,6 +26,8 @@ struct Board {
 
 Piece piece_at(const Board& board, int square);
 void set_piece(Board& board, int square, Piece piece);
+bool is_empty_square(const Board& board, int square);
+bool is_occupied_by(const Board& board, int square, Color color);
 
 Board empty_board();
 

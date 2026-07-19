@@ -1,1 +1,12 @@
+#pragma once
 
+#include <vector>
+
+#include "chess/board/board.hpp"
+#include "chess/core/move.hpp"
+
+namespace chess {
+
+std::vector<Move> generate_pseudo_legal_moves(const Board& board);
+
+}
