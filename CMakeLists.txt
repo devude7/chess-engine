@@ -44,3 +44,14 @@ target_link_libraries(movegen_tests
 )
 
 add_test(NAME movegen_tests COMMAND movegen_tests)
+
+add_executable(board_tests
+    tests/unit/board_tests.cpp
+)
+
+target_link_libraries(board_tests
+    PRIVATE
+        chess_engine_core
+)
+
+add_test(NAME board_tests COMMAND board_tests)
