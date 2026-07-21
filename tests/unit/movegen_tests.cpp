@@ -217,6 +217,33 @@ void test_legal_moves_can_escape_check() {
     assert(!contains_move(moves, 4, 12));
 }
 
+void test_castling_moves_are_generated() {
+    chess::Board board = chess::board_from_fen("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1");
+
+    std::vector<chess::Move> moves = chess::generate_legal_moves(board);
+
+    assert(contains_move(moves, 4, 6, chess::MoveType::Castling, chess::PieceType::None));
+    assert(contains_move(moves, 4, 2, chess::MoveType::Castling, chess::PieceType::None));
+}
+
+void test_castling_blocked_by_piece() {
+    chess::Board board = chess::board_from_fen("r3k2r/8/8/8/8/8/8/R3KB1R w KQkq - 0 1");
+
+    std::vector<chess::Move> moves = chess::generate_legal_moves(board);
+
+    assert(!contains_move(moves, 4, 6, chess::MoveType::Castling, chess::PieceType::None));
+    assert(contains_move(moves, 4, 2, chess::MoveType::Castling, chess::PieceType::None));
+}
+
+void test_castling_blocked_by_attacked_square() {
+    chess::Board board = chess::board_from_fen("r3k2r/8/8/8/5r2/8/8/R3K2R w KQkq - 0 1");
+
+    std::vector<chess::Move> moves = chess::generate_legal_moves(board);
+
+    assert(!contains_move(moves, 4, 6, chess::MoveType::Castling, chess::PieceType::None));
+    assert(contains_move(moves, 4, 2, chess::MoveType::Castling, chess::PieceType::None));
+}
+
 } 
 
 int main() {
@@ -237,6 +264,9 @@ int main() {
     test_king_cannot_move_into_check();
     test_pinned_piece_cannot_expose_king();
     test_legal_moves_can_escape_check();
+    test_castling_moves_are_generated();
+    test_castling_blocked_by_piece();
+    test_castling_blocked_by_attacked_square();
 
     return 0;
 }

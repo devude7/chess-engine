@@ -12,6 +12,7 @@ void generate_bishop_moves(const Board& board, int from, std::vector<Move>& move
 void generate_rook_moves(const Board& board, int from, std::vector<Move>& moves);
 void generate_queen_moves(const Board& board, int from, std::vector<Move>& moves);
 void generate_king_moves(const Board& board, int from, std::vector<Move>& moves);
+void generate_castling_moves(const Board& board, int from, std::vector<Move>& moves);
 void generate_sliding_moves(const Board& board, int from, const int directions[][2], int direction_count, std::vector<Move>& moves);
 void add_pawn_move(int from, int to, bool is_promotion, std::vector<Move>& moves);
 
@@ -211,6 +212,52 @@ void generate_king_moves(const Board& board, int from, std::vector<Move>& moves)
         }
 
         moves.push_back(Move{from, to, MoveType::Normal, PieceType::None});
+    }
+    generate_castling_moves(board, from, moves);
+}
+
+void generate_castling_moves(const Board& board, int from, std::vector<Move>& moves) {
+    Color color = board.side_to_move;
+    Color enemy = opposite(color);
+
+    if (color == Color::White && from == 4) {
+        if (board.castling_rights.white_kingside
+            && is_empty_square(board, 5)
+            && is_empty_square(board, 6)
+            && !is_square_attacked(board, 4, enemy)
+            && !is_square_attacked(board, 5, enemy)
+            && !is_square_attacked(board, 6, enemy)) {
+            moves.push_back(Move{4, 6, MoveType::Castling, PieceType::None});
+        }
+
+        if (board.castling_rights.white_queenside
+            && is_empty_square(board, 3)
+            && is_empty_square(board, 2)
+            && is_empty_square(board, 1)
+            && !is_square_attacked(board, 4, enemy)
+            && !is_square_attacked(board, 3, enemy)
+            && !is_square_attacked(board, 2, enemy)) {
+            moves.push_back(Move{4, 2, MoveType::Castling, PieceType::None});
+        }
+    } else if (color == Color::Black && from == 60) {
+        if (board.castling_rights.black_kingside
+            && is_empty_square(board, 61)
+            && is_empty_square(board, 62)
+            && !is_square_attacked(board, 60, enemy)
+            && !is_square_attacked(board, 61, enemy)
+            && !is_square_attacked(board, 62, enemy)) {
+            moves.push_back(Move{60, 62, MoveType::Castling, PieceType::None});
+        }
+
+        if (board.castling_rights.black_queenside
+            && is_empty_square(board, 59)
+            && is_empty_square(board, 58)
+            && is_empty_square(board, 57)
+            && !is_square_attacked(board, 60, enemy)
+            && !is_square_attacked(board, 59, enemy)
+            && !is_square_attacked(board, 58, enemy)) {
+            moves.push_back(Move{60, 58, MoveType::Castling, PieceType::None});
+        }
     }
 }
 
