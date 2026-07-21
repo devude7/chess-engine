@@ -54,14 +54,14 @@ void generate_pawn_moves(const Board& board, int from, std::vector<Move>& moves)
     int from_rank = rank_of(from);
 
     int one_step_rank = from_rank + direction;
-    if (one_step_rank >= 0 && one_step_rank < 8) {
+    if (is_valid_file_rank(from_file, one_step_rank)) {
         int one_step = one_step_rank * 8 + from_file;
 
         if (is_empty_square(board, one_step)) {
             add_pawn_move(from, one_step, one_step_rank == promotion_rank, moves);
 
             int two_step_rank = from_rank + 2 * direction;
-            if (from_rank == start_rank && two_step_rank >= 0 && two_step_rank < 8) {
+            if (from_rank == start_rank && is_valid_file_rank(from_file, two_step_rank)) {
                 int two_step = two_step_rank * 8 + from_file;
 
                 if (is_empty_square(board, two_step)) {
@@ -75,7 +75,7 @@ void generate_pawn_moves(const Board& board, int from, std::vector<Move>& moves)
         int to_file = from_file + file_delta;
         int to_rank = from_rank + direction;
 
-        if (to_file < 0 || to_file >= 8 || to_rank < 0 || to_rank >= 8) {
+        if (!is_valid_file_rank(to_file, to_rank)) {
             continue;
         }
 
@@ -108,7 +108,7 @@ void generate_knight_moves(const Board& board, int from, std::vector<Move>& move
         int to_file = from_file + offset[0];
         int to_rank = from_rank + offset[1];
 
-        if (to_file < 0 || to_file >= 8 || to_rank < 0 || to_rank >= 8) {
+        if (!is_valid_file_rank(to_file, to_rank)) {
             continue;
         }
 
@@ -175,7 +175,7 @@ void generate_king_moves(const Board& board, int from, std::vector<Move>& moves)
         int to_file = from_file + offset[0];
         int to_rank = from_rank + offset[1];
 
-        if (to_file < 0 || to_file >= 8 || to_rank < 0 || to_rank >= 8) {
+        if (!is_valid_file_rank(to_file, to_rank)) {
             continue;
         }
 
@@ -199,7 +199,7 @@ void generate_sliding_moves(const Board& board, int from, const int directions[]
         int to_file = from_file + file_delta;
         int to_rank = from_rank + rank_delta;
 
-        while (to_file >= 0 && to_file < 8 && to_rank >= 0 && to_rank < 8) {
+        while (is_valid_file_rank(to_file, to_rank)) {
             int to = to_rank * 8 + to_file;
 
             if (is_occupied_by(board, to, board.side_to_move)) {

@@ -194,7 +194,7 @@ void test_en_passant() {
     assert(contains_move(moves, 36, 43, chess::MoveType::EnPassant, chess::PieceType::None));
 }
 
-} // namespace
+} 
 
 int main() {
     test_knight_in_center();
