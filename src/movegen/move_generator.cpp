@@ -1,5 +1,7 @@
 #include "chess/movegen/move_generator.hpp"
 
+#include "chess/movegen/attack.hpp"
+
 namespace chess {
 
 namespace {
@@ -41,6 +43,29 @@ std::vector<Move> generate_pseudo_legal_moves(const Board& board) {
     }
 
     return moves;
+}
+
+std::vector<Move> generate_legal_moves(const Board& board) {
+    std::vector<Move> legal_moves;
+    std::vector<Move> pseudo_moves = generate_pseudo_legal_moves(board);
+
+    for (Move move : pseudo_moves) {
+        Board copy = board;
+        UndoState undo{};
+        Color moving_side = copy.side_to_move;
+
+        if (!make_move(copy, move, undo)) {
+            continue;
+        }
+
+        if (!is_in_check(copy, moving_side)) {
+            legal_moves.push_back(move);
+        }
+
+        undo_move(copy, move, undo);
+    }
+
+    return legal_moves;
 }
 
 namespace {

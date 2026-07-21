@@ -17,12 +17,7 @@ bool contains_move(const std::vector<chess::Move>& moves, int from, int to) {
     return false;
 }
 
-bool contains_move(
-    const std::vector<chess::Move>& moves,
-    int from,
-    int to,
-    chess::MoveType type,
-    chess::PieceType promotion) {
+bool contains_move(const std::vector<chess::Move>& moves, int from, int to, chess::MoveType type, chess::PieceType promotion) {
     for (const chess::Move& move : moves) {
         if (move.from == from && move.to == to && move.type == type && move.promotion == promotion) {
             return true;
@@ -194,6 +189,34 @@ void test_en_passant() {
     assert(contains_move(moves, 36, 43, chess::MoveType::EnPassant, chess::PieceType::None));
 }
 
+void test_king_cannot_move_into_check() {
+    chess::Board board = chess::board_from_fen("k3r3/8/8/8/8/8/8/4K3 w - - 0 1");
+
+    std::vector<chess::Move> moves = chess::generate_legal_moves(board);
+
+    assert(!contains_move(moves, 4, 12));
+    assert(contains_move(moves, 4, 3));
+}
+
+void test_pinned_piece_cannot_expose_king() {
+    chess::Board board = chess::board_from_fen("k3r3/8/8/8/8/8/4R3/4K3 w - - 0 1");
+
+    std::vector<chess::Move> moves = chess::generate_legal_moves(board);
+
+    assert(!contains_move(moves, 12, 11));
+    assert(contains_move(moves, 12, 60));
+}
+
+void test_legal_moves_can_escape_check() {
+    chess::Board board = chess::board_from_fen("k3r3/8/8/8/8/8/8/4K3 w - - 0 1");
+
+    std::vector<chess::Move> moves = chess::generate_legal_moves(board);
+
+    assert(contains_move(moves, 4, 3));
+    assert(contains_move(moves, 4, 5));
+    assert(!contains_move(moves, 4, 12));
+}
+
 } 
 
 int main() {
@@ -211,6 +234,9 @@ int main() {
     test_pawn_captures();
     test_pawn_promotion();
     test_en_passant();
+    test_king_cannot_move_into_check();
+    test_pinned_piece_cannot_expose_king();
+    test_legal_moves_can_escape_check();
 
     return 0;
 }

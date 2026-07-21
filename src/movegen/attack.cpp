@@ -122,7 +122,11 @@ bool is_attacked_by_slider(
                 continue;
             }
 
-            return piece.color == by_color && (piece.type == first_attacker || piece.type == second_attacker);
+            if (piece.color == by_color && (piece.type == first_attacker || piece.type == second_attacker)) {
+                return true;
+            }
+
+            break;
         }
     }
 
