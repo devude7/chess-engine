@@ -17,6 +17,7 @@ add_library(chess_engine_core
     src/movegen/attack.cpp
     src/movegen/move_generator.cpp
     src/movegen/perft.cpp
+    src/search/evaluation.cpp
 )
 
 target_include_directories(chess_engine_core
@@ -80,6 +81,17 @@ target_link_libraries(game_state_tests
 )
 
 add_test(NAME game_state_tests COMMAND game_state_tests)
+
+add_executable(evaluation_tests
+    tests/unit/evaluation_tests.cpp
+)
+
+target_link_libraries(evaluation_tests
+    PRIVATE
+        chess_engine_core
+)
+
+add_test(NAME evaluation_tests COMMAND evaluation_tests)
 
 add_executable(perft_tests
     tests/perft/perft_tests.cpp
