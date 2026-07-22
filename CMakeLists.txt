@@ -13,6 +13,7 @@ add_library(chess_engine_core
     src/core/move.cpp
     src/board/board.cpp
     src/board/fen.cpp
+    src/game/game_state.cpp
     src/movegen/attack.cpp
     src/movegen/move_generator.cpp
     src/movegen/perft.cpp
@@ -68,6 +69,17 @@ target_link_libraries(attack_tests
 )
 
 add_test(NAME attack_tests COMMAND attack_tests)
+
+add_executable(game_state_tests
+    tests/unit/game_state_tests.cpp
+)
+
+target_link_libraries(game_state_tests
+    PRIVATE
+        chess_engine_core
+)
+
+add_test(NAME game_state_tests COMMAND game_state_tests)
 
 add_executable(perft_tests
     tests/perft/perft_tests.cpp
