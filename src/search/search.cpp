@@ -12,6 +12,7 @@ namespace chess {
 
 namespace {
 
+constexpr int Infinity = 1000000;
 constexpr int MateScore = 100000;
 
 Move no_move() {
@@ -24,7 +25,7 @@ int evaluate_for_side_to_move(const Board& board) {
     return board.side_to_move == Color::White ? score : -score;
 }
 
-int negamax(Board& board, int depth) {
+int negamax(Board& board, int depth, int alpha, int beta) {
     if (depth == 0) {
         return evaluate_for_side_to_move(board);
     }
@@ -48,11 +49,19 @@ int negamax(Board& board, int depth) {
             continue;
         }
 
-        int score = -negamax(board, depth - 1);
+        int score = -negamax(board, depth - 1, -beta, -alpha);
         undo_move(board, move, undo);
 
         if (score > best_score) {
             best_score = score;
+        }
+
+        if (score > alpha) {
+            alpha = score;
+        }
+
+        if (alpha >= beta) {
+            break;
         }
     }
 
@@ -70,6 +79,8 @@ SearchResult find_best_move(Board& board, int depth) {
 
     Move best_move = moves.front();
     int best_score = std::numeric_limits<int>::min();
+    int alpha = -Infinity;
+    int beta = Infinity;
 
     for (Move move : moves) {
         UndoState undo{};
@@ -78,12 +89,16 @@ SearchResult find_best_move(Board& board, int depth) {
             continue;
         }
 
-        int score = -negamax(board, depth - 1);
+        int score = -negamax(board, depth - 1, -beta, -alpha);
         undo_move(board, move, undo);
 
         if (score > best_score) {
             best_score = score;
             best_move = move;
+        }
+
+        if (score > alpha) {
+            alpha = score;
         }
     }
 
