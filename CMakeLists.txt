@@ -19,6 +19,7 @@ add_library(chess_engine_core
     src/movegen/perft.cpp
     src/search/evaluation.cpp
     src/search/search.cpp
+    src/uci/uci_move.cpp
 )
 
 target_include_directories(chess_engine_core
@@ -104,6 +105,17 @@ target_link_libraries(search_tests
 )
 
 add_test(NAME search_tests COMMAND search_tests)
+
+add_executable(uci_move_tests
+    tests/unit/uci_move_tests.cpp
+)
+
+target_link_libraries(uci_move_tests
+    PRIVATE
+        chess_engine_core
+)
+
+add_test(NAME uci_move_tests COMMAND uci_move_tests)
 
 add_executable(perft_tests
     tests/perft/perft_tests.cpp
