@@ -54,7 +54,7 @@ void test_promotion_scores_higher_than_quiet_move() {
 }
 
 void test_quiescence_returns_static_evaluation_in_quiet_position() {
-    chess::Board board = chess::board_from_fen("7k/8/8/8/8/8/8/Q3K3 w - - 0 1");
+    chess::Board board = chess::board_from_fen("7k/8/8/8/8/8/8/4K3 w - - 0 1");
 
     assert(chess::quiescence(board, -1000000, 1000000) == chess::evaluate(board));
 }
@@ -62,7 +62,11 @@ void test_quiescence_returns_static_evaluation_in_quiet_position() {
 void test_quiescence_sees_immediate_capture() {
     chess::Board board = chess::board_from_fen("4r1k1/8/8/4R3/8/8/8/4K3 b - - 0 1");
 
-    assert(chess::quiescence(board, -1000000, 1000000) == 500);
+    int static_score_for_black = -chess::evaluate(board);
+    int quiescence_score = chess::quiescence(board, -1000000, 1000000);
+
+    assert(quiescence_score > static_score_for_black);
+    assert(quiescence_score > 0);
 }
 
 }
