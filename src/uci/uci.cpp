@@ -15,6 +15,7 @@ namespace chess {
 namespace {
 
 constexpr const char* StartPositionFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+constexpr int DefaultSearchDepth = 5;
 
 std::vector<std::string> split_words(const std::string& text) {
     std::istringstream stream(text);
@@ -85,7 +86,7 @@ int depth_from_go_command(const std::string& line) {
         }
     }
 
-    return 3;
+    return DefaultSearchDepth;
 }
 
 }
