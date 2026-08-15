@@ -1,5 +1,6 @@
 #include "chess/search/search.hpp"
 
+#include <algorithm>
 #include <limits>
 #include <vector>
 
@@ -25,6 +26,20 @@ int evaluate_for_side_to_move(const Board& board) {
     return board.side_to_move == Color::White ? score : -score;
 }
 
+int captured_square_for_move(Move move, Piece moving_piece) {
+    if (move.type == MoveType::EnPassant) {
+        return moving_piece.color == Color::White ? move.to - 8 : move.to + 8;
+    }
+
+    return move.to;
+}
+
+void order_moves(const Board& board, std::vector<Move>& moves) {
+    std::sort(moves.begin(), moves.end(), [&board](Move left, Move right) {
+        return move_order_score(board, left) > move_order_score(board, right);
+    });
+}
+
 int negamax(Board& board, int depth, int alpha, int beta) {
     if (depth == 0) {
         return evaluate_for_side_to_move(board);
@@ -41,6 +56,7 @@ int negamax(Board& board, int depth, int alpha, int beta) {
     }
 
     int best_score = std::numeric_limits<int>::min();
+    order_moves(board, moves);
 
     for (Move move : moves) {
         UndoState undo{};
@@ -81,6 +97,7 @@ SearchResult find_best_move(Board& board, int depth) {
     int best_score = std::numeric_limits<int>::min();
     int alpha = -Infinity;
     int beta = Infinity;
+    order_moves(board, moves);
 
     for (Move move : moves) {
         UndoState undo{};
@@ -103,6 +120,27 @@ SearchResult find_best_move(Board& board, int depth) {
     }
 
     return SearchResult{best_move, best_score};
+}
+
+int move_order_score(const Board& board, Move move) {
+    int score = 0;
+    Piece moving_piece = piece_at(board, move.from);
+
+    if (move.type == MoveType::Promotion) {
+        score += 80000 + piece_value(move.promotion);
+    }
+
+    int captured_square = captured_square_for_move(move, moving_piece);
+
+    if (is_valid_square(captured_square)) {
+        Piece captured_piece = piece_at(board, captured_square);
+
+        if (!is_empty(captured_piece)) {
+            score += 10000 + piece_value(captured_piece.type) * 10 - piece_value(moving_piece.type);
+        }
+    }
+
+    return score;
 }
 
 }

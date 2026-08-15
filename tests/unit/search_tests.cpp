@@ -34,12 +34,32 @@ void test_find_best_move_returns_no_move_when_no_legal_moves_exist() {
     assert(result.best_move.to == chess::NoSquare);
 }
 
+void test_capture_scores_higher_than_quiet_move() {
+    chess::Board board = chess::board_from_fen("4k3/8/8/4q3/4R3/8/8/4K3 w - - 0 1");
+
+    chess::Move capture{28, 36, chess::MoveType::Normal, chess::PieceType::None};
+    chess::Move quiet{28, 29, chess::MoveType::Normal, chess::PieceType::None};
+
+    assert(chess::move_order_score(board, capture) > chess::move_order_score(board, quiet));
+}
+
+void test_promotion_scores_higher_than_quiet_move() {
+    chess::Board board = chess::board_from_fen("7k/4P3/8/8/8/8/8/4K3 w - - 0 1");
+
+    chess::Move promotion{52, 60, chess::MoveType::Promotion, chess::PieceType::Queen};
+    chess::Move quiet{4, 5, chess::MoveType::Normal, chess::PieceType::None};
+
+    assert(chess::move_order_score(board, promotion) > chess::move_order_score(board, quiet));
+}
+
 }
 
 int main() {
     test_find_best_move_returns_legal_move_in_start_position();
     test_find_best_move_captures_high_value_piece();
     test_find_best_move_returns_no_move_when_no_legal_moves_exist();
+    test_capture_scores_higher_than_quiet_move();
+    test_promotion_scores_higher_than_quiet_move();
 
     return 0;
 }
