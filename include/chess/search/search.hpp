@@ -12,5 +12,6 @@ struct SearchResult {
 
 SearchResult find_best_move(Board& board, int depth);
 int move_order_score(const Board& board, Move move);
+int quiescence(Board& board, int alpha, int beta);
 
 }

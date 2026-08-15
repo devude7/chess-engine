@@ -26,6 +26,10 @@ int evaluate_for_side_to_move(const Board& board) {
     return board.side_to_move == Color::White ? score : -score;
 }
 
+bool is_tactical_move(const Board& board, Move move) {
+    return move.type == MoveType::Promotion || !is_empty(piece_at(board, move.to)) || move.type == MoveType::EnPassant;
+}
+
 int captured_square_for_move(Move move, Piece moving_piece) {
     if (move.type == MoveType::EnPassant) {
         return moving_piece.color == Color::White ? move.to - 8 : move.to + 8;
@@ -42,7 +46,7 @@ void order_moves(const Board& board, std::vector<Move>& moves) {
 
 int negamax(Board& board, int depth, int alpha, int beta) {
     if (depth == 0) {
-        return evaluate_for_side_to_move(board);
+        return quiescence(board, alpha, beta);
     }
 
     std::vector<Move> moves = generate_legal_moves(board);
@@ -141,6 +145,46 @@ int move_order_score(const Board& board, Move move) {
     }
 
     return score;
+}
+
+int quiescence(Board& board, int alpha, int beta) {
+    int stand_pat = evaluate_for_side_to_move(board);
+
+    if (stand_pat >= beta) {
+        return beta;
+    }
+
+    if (stand_pat > alpha) {
+        alpha = stand_pat;
+    }
+
+    std::vector<Move> moves = generate_legal_moves(board);
+    order_moves(board, moves);
+
+    for (Move move : moves) {
+        if (!is_tactical_move(board, move)) {
+            continue;
+        }
+
+        UndoState undo{};
+
+        if (!make_move(board, move, undo)) {
+            continue;
+        }
+
+        int score = -quiescence(board, -beta, -alpha);
+        undo_move(board, move, undo);
+
+        if (score >= beta) {
+            return beta;
+        }
+
+        if (score > alpha) {
+            alpha = score;
+        }
+    }
+
+    return alpha;
 }
 
 }

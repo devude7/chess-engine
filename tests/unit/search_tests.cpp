@@ -2,6 +2,7 @@
 
 #include "chess/board/fen.hpp"
 #include "chess/core/square.hpp"
+#include "chess/search/evaluation.hpp"
 #include "chess/search/search.hpp"
 
 namespace {
@@ -52,6 +53,18 @@ void test_promotion_scores_higher_than_quiet_move() {
     assert(chess::move_order_score(board, promotion) > chess::move_order_score(board, quiet));
 }
 
+void test_quiescence_returns_static_evaluation_in_quiet_position() {
+    chess::Board board = chess::board_from_fen("7k/8/8/8/8/8/8/Q3K3 w - - 0 1");
+
+    assert(chess::quiescence(board, -1000000, 1000000) == chess::evaluate(board));
+}
+
+void test_quiescence_sees_immediate_capture() {
+    chess::Board board = chess::board_from_fen("4r1k1/8/8/4R3/8/8/8/4K3 b - - 0 1");
+
+    assert(chess::quiescence(board, -1000000, 1000000) == 500);
+}
+
 }
 
 int main() {
@@ -60,6 +73,8 @@ int main() {
     test_find_best_move_returns_no_move_when_no_legal_moves_exist();
     test_capture_scores_higher_than_quiet_move();
     test_promotion_scores_higher_than_quiet_move();
+    test_quiescence_returns_static_evaluation_in_quiet_position();
+    test_quiescence_sees_immediate_capture();
 
     return 0;
 }
