@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <limits>
+#include <string>
 #include <vector>
 
+#include "chess/board/position_key.hpp"
 #include "chess/core/square.hpp"
 #include "chess/movegen/attack.hpp"
 #include "chess/movegen/move_generator.hpp"
@@ -15,6 +17,7 @@ namespace {
 
 constexpr int Infinity = 1000000;
 constexpr int MateScore = 100000;
+constexpr int RepetitionPenalty = 200;
 
 Move no_move() {
     return Move{NoSquare, NoSquare, MoveType::Normal, PieceType::None};
@@ -42,6 +45,10 @@ void order_moves(const Board& board, std::vector<Move>& moves) {
     std::sort(moves.begin(), moves.end(), [&board](Move left, Move right) {
         return move_order_score(board, left) > move_order_score(board, right);
     });
+}
+
+bool contains_position(const std::vector<std::string>& positions, const std::string& key) {
+    return std::find(positions.begin(), positions.end(), key) != positions.end();
 }
 
 int negamax(Board& board, int depth, int alpha, int beta) {
@@ -91,6 +98,10 @@ int negamax(Board& board, int depth, int alpha, int beta) {
 }
 
 SearchResult find_best_move(Board& board, int depth) {
+    return find_best_move(board, depth, std::vector<std::string>{});
+}
+
+SearchResult find_best_move(Board& board, int depth, const std::vector<std::string>& recent_positions) {
     std::vector<Move> moves = generate_legal_moves(board);
 
     if (moves.empty() || depth <= 0) {
@@ -111,6 +122,11 @@ SearchResult find_best_move(Board& board, int depth) {
         }
 
         int score = -negamax(board, depth - 1, -beta, -alpha);
+
+        if (contains_position(recent_positions, position_key(board))) {
+            score -= RepetitionPenalty;
+        }
+
         undo_move(board, move, undo);
 
         if (score > best_score) {

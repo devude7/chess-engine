@@ -1,11 +1,14 @@
 #include "chess/uci/uci.hpp"
 
+#include <cstdlib>
 #include <iostream>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <vector>
 
 #include "chess/board/fen.hpp"
+#include "chess/board/position_key.hpp"
 #include "chess/core/square.hpp"
 #include "chess/search/search.hpp"
 #include "chess/uci/uci_move.hpp"
@@ -16,6 +19,12 @@ namespace {
 
 constexpr const char* StartPositionFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 constexpr int DefaultSearchDepth = 5;
+
+struct PositionState {
+    Board board;
+    std::vector<std::string> position_history;
+    std::vector<std::string> move_history;
+};
 
 std::vector<std::string> split_words(const std::string& text) {
     std::istringstream stream(text);
@@ -29,52 +38,117 @@ std::vector<std::string> split_words(const std::string& text) {
     return words;
 }
 
-void apply_uci_moves(Board& board, const std::vector<std::string>& words, int first_move_index) {
+bool parse_int(const std::string& text, int& value) {
+    char* end = nullptr;
+    long parsed = std::strtol(text.c_str(), &end, 10);
+
+    if (end == text.c_str() || *end != '\0') {
+        return false;
+    }
+
+    value = static_cast<int>(parsed);
+    return true;
+}
+
+std::string move_history_key(const std::vector<std::string>& move_history) {
+    std::string key;
+
+    for (const std::string& move : move_history) {
+        if (!key.empty()) {
+            key += ' ';
+        }
+
+        key += move;
+    }
+
+    return key;
+}
+
+std::optional<std::string> opening_book_move(const std::vector<std::string>& move_history) {
+    std::string key = move_history_key(move_history);
+
+    if (key.empty()) {
+        return "e2e4";
+    }
+
+    if (key == "e2e4") {
+        return "e7e5";
+    }
+
+    if (key == "e2e4 e7e5") {
+        return "g1f3";
+    }
+
+    if (key == "e2e4 e7e5 g1f3") {
+        return "b8c6";
+    }
+
+    if (key == "d2d4") {
+        return "d7d5";
+    }
+
+    if (key == "d2d4 d7d5") {
+        return "c2c4";
+    }
+
+    return std::nullopt;
+}
+
+void apply_uci_moves(PositionState& state, const std::vector<std::string>& words, int first_move_index) {
     for (int index = first_move_index; index < static_cast<int>(words.size()); ++index) {
-        Move move = move_from_uci(board, words[index]);
+        Move move = move_from_uci(state.board, words[index]);
 
         if (move.from == NoSquare || move.to == NoSquare) {
             return;
         }
 
         UndoState undo{};
-        make_move(board, move, undo);
+        make_move(state.board, move, undo);
+        state.move_history.push_back(words[index]);
+        state.position_history.push_back(position_key(state.board));
     }
 }
 
-Board board_from_position_command(const std::string& line, const Board& current_board) {
+PositionState start_position_state() {
+    PositionState state{board_from_fen(StartPositionFen), {}, {}};
+    state.position_history.push_back(position_key(state.board));
+    return state;
+}
+
+PositionState position_state_from_command(const std::string& line, const PositionState& current_state) {
     std::vector<std::string> words = split_words(line);
 
     if (words.size() < 2 || words[0] != "position") {
-        return current_board;
+        return current_state;
     }
 
     if (words[1] == "startpos") {
-        Board board = board_from_fen(StartPositionFen);
+        PositionState state = start_position_state();
 
         if (words.size() > 2 && words[2] == "moves") {
-            apply_uci_moves(board, words, 3);
+            apply_uci_moves(state, words, 3);
         }
 
-        return board;
+        return state;
     }
 
     if (words[1] == "fen") {
         if (words.size() < 8) {
-            return current_board;
+            return current_state;
         }
 
         std::string fen = words[2] + " " + words[3] + " " + words[4] + " " + words[5] + " " + words[6] + " " + words[7];
-        Board board = board_from_fen(fen);
+        PositionState state{board_from_fen(fen), {}, {}};
+        state.position_history.push_back(position_key(state.board));
 
         if (words.size() > 8 && words[8] == "moves") {
-            apply_uci_moves(board, words, 9);
+            apply_uci_moves(state, words, 9);
         }
 
-        return board;
+        return state;
     }
 
-    return current_board;
+    return current_state;
 }
 
 int depth_from_go_command(const std::string& line) {
@@ -82,7 +156,13 @@ int depth_from_go_command(const std::string& line) {
 
     for (int index = 0; index + 1 < static_cast<int>(words.size()); ++index) {
         if (words[index] == "depth") {
-            return std::stoi(words[index + 1]);
+            int depth = DefaultSearchDepth;
+
+            if (parse_int(words[index + 1], depth) && depth > 0) {
+                return depth;
+            }
+
+            return DefaultSearchDepth;
         }
     }
 
@@ -96,7 +176,7 @@ void run_uci_loop() {
 }
 
 void run_uci_loop(std::istream& input, std::ostream& output) {
-    Board board = board_from_fen(StartPositionFen);
+    PositionState state = start_position_state();
     std::string line;
 
     while (std::getline(input, line)) {
@@ -109,12 +189,24 @@ void run_uci_loop(std::istream& input, std::ostream& output) {
             output << "readyok\n";
             output.flush();
         } else if (line == "ucinewgame") {
-            board = board_from_fen(StartPositionFen);
+            state = start_position_state();
         } else if (line.rfind("position", 0) == 0) {
-            board = board_from_position_command(line, board);
+            state = position_state_from_command(line, state);
         } else if (line.rfind("go", 0) == 0) {
+            std::optional<std::string> book_move_text = opening_book_move(state.move_history);
+
+            if (book_move_text.has_value()) {
+                Move book_move = move_from_uci(state.board, *book_move_text);
+
+                if (book_move.from != NoSquare && book_move.to != NoSquare) {
+                    output << "bestmove " << *book_move_text << '\n';
+                    output.flush();
+                    continue;
+                }
+            }
+
             int depth = depth_from_go_command(line);
-            SearchResult result = find_best_move(board, depth);
+            SearchResult result = find_best_move(state.board, depth, state.position_history);
 
             output << "bestmove " << move_to_uci(result.best_move) << '\n';
             output.flush();

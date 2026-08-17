@@ -1,5 +1,8 @@
 #pragma once
 
+#include <string>
+#include <vector>
+
 #include "chess/board/board.hpp"
 #include "chess/core/move.hpp"
 
@@ -11,6 +14,7 @@ struct SearchResult {
 };
 
 SearchResult find_best_move(Board& board, int depth);
+SearchResult find_best_move(Board& board, int depth, const std::vector<std::string>& recent_positions);
 int move_order_score(const Board& board, Move move);
 int quiescence(Board& board, int alpha, int beta);
 

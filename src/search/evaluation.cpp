@@ -100,6 +100,97 @@ const int* table_for_piece(PieceType piece_type) {
     return nullptr;
 }
 
+int material_balance(const Board& board) {
+    int score = 0;
+
+    for (Piece piece : board.squares) {
+        int value = piece_value(piece.type);
+
+        if (piece.color == Color::White) {
+            score += value;
+        } else {
+            score -= value;
+        }
+    }
+
+    return score;
+}
+
+int non_king_material(const Board& board) {
+    int material = 0;
+
+    for (Piece piece : board.squares) {
+        if (piece.type != PieceType::King) {
+            material += piece_value(piece.type);
+        }
+    }
+
+    return material;
+}
+
+int king_square_for_color(const Board& board, Color color) {
+    for (int square = 0; square < 64; ++square) {
+        Piece piece = board.squares[square];
+
+        if (piece.type == PieceType::King && piece.color == color) {
+            return square;
+        }
+    }
+
+    return NoSquare;
+}
+
+int distance_between(int first_square, int second_square) {
+    int file_distance = file_of(first_square) - file_of(second_square);
+    int rank_distance = rank_of(first_square) - rank_of(second_square);
+
+    if (file_distance < 0) {
+        file_distance = -file_distance;
+    }
+
+    if (rank_distance < 0) {
+        rank_distance = -rank_distance;
+    }
+
+    return file_distance + rank_distance;
+}
+
+int edge_distance(int square) {
+    int file = file_of(square);
+    int rank = rank_of(square);
+    int file_edge_distance = file < 7 - file ? file : 7 - file;
+    int rank_edge_distance = rank < 7 - rank ? rank : 7 - rank;
+
+    return file_edge_distance < rank_edge_distance ? file_edge_distance : rank_edge_distance;
+}
+
+int endgame_mop_up_bonus(const Board& board) {
+    int material = material_balance(board);
+
+    if (material > -500 && material < 500) {
+        return 0;
+    }
+
+    if (non_king_material(board) > 2200) {
+        return 0;
+    }
+
+    Color winning_color = material > 0 ? Color::White : Color::Black;
+    Color losing_color = opposite(winning_color);
+    int winning_king = king_square_for_color(board, winning_color);
+    int losing_king = king_square_for_color(board, losing_color);
+
+    if (winning_king == NoSquare || losing_king == NoSquare) {
+        return 0;
+    }
+
+    int edge_bonus = (3 - edge_distance(losing_king)) * 30;
+    int king_distance_bonus = (14 - distance_between(winning_king, losing_king)) * 4;
+    int bonus = edge_bonus + king_distance_bonus;
+
+    return winning_color == Color::White ? bonus : -bonus;
+}
+
 }
 
 int piece_value(PieceType piece_type) {
@@ -146,7 +237,8 @@ int evaluate(const Board& board) {
             score -= value;
         }
     }
-    return score;
+
+    return score + endgame_mop_up_bonus(board);
 }
 
 }

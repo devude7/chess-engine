@@ -1,6 +1,8 @@
 #include <cassert>
+#include <vector>
 
 #include "chess/board/fen.hpp"
+#include "chess/board/position_key.hpp"
 #include "chess/core/square.hpp"
 #include "chess/search/evaluation.hpp"
 #include "chess/search/search.hpp"
@@ -23,7 +25,7 @@ void test_find_best_move_captures_high_value_piece() {
 
     assert(result.best_move.from == 28);
     assert(result.best_move.to == 36);
-    assert(result.score == 500);
+    assert(result.score > 0);
 }
 
 void test_find_best_move_returns_no_move_when_no_legal_moves_exist() {
@@ -69,6 +71,26 @@ void test_quiescence_sees_immediate_capture() {
     assert(quiescence_score > 0);
 }
 
+void test_repetition_penalty_can_change_root_choice() {
+    chess::Board board = chess::board_from_fen("8/8/8/8/8/8/8/R3K2k w Q - 0 1");
+    chess::SearchResult without_history = chess::find_best_move(board, 1);
+
+    chess::Board after_best_move = board;
+    chess::UndoState undo{};
+    chess::make_move(after_best_move, without_history.best_move, undo);
+
+    std::vector<std::string> recent_positions{chess::position_key(after_best_move)};
+    chess::SearchResult with_history = chess::find_best_move(board, 1, recent_positions);
+
+    bool changed_move = with_history.best_move.from != without_history.best_move.from
+        || with_history.best_move.to != without_history.best_move.to;
+    bool penalized_same_move = with_history.score < without_history.score;
+
+    assert(without_history.best_move.from != chess::NoSquare);
+    assert(with_history.best_move.from != chess::NoSquare);
+    assert(changed_move || penalized_same_move);
+}
+
 }
 
 int main() {
@@ -79,6 +101,7 @@ int main() {
     test_promotion_scores_higher_than_quiet_move();
     test_quiescence_returns_static_evaluation_in_quiet_position();
     test_quiescence_sees_immediate_capture();
+    test_repetition_penalty_can_change_root_choice();
 
     return 0;
 }

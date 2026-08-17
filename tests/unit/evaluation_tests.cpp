@@ -53,6 +53,13 @@ void test_developed_knight_improves_evaluation() {
     assert(chess::evaluate(developed) > chess::evaluate(undeveloped));
 }
 
+void test_winning_endgame_prefers_losing_king_on_edge() {
+    chess::Board king_in_center = chess::board_from_fen("8/8/8/3k4/8/8/8/Q3K3 w - - 0 1");
+    chess::Board king_on_edge = chess::board_from_fen("7k/8/8/8/8/8/8/Q3K3 w - - 0 1");
+
+    assert(chess::evaluate(king_on_edge) > chess::evaluate(king_in_center));
+}
+
 }
 
 int main() {
@@ -63,6 +70,7 @@ int main() {
     test_knight_is_better_in_center_than_corner();
     test_black_piece_square_table_is_mirrored();
     test_developed_knight_improves_evaluation();
+    test_winning_endgame_prefers_losing_king_on_edge();
 
     return 0;
 }
