@@ -27,6 +27,19 @@ bool contains_move(const std::vector<chess::Move>& moves, int from, int to, ches
     return false;
 }
 
+bool same_move(chess::Move left, chess::Move right) {
+    return left.from == right.from
+        && left.to == right.to
+        && left.type == right.type
+        && left.promotion == right.promotion;
+}
+
+bool is_tactical_test_move(const chess::Board& board, chess::Move move) {
+    return move.type == chess::MoveType::Promotion
+        || move.type == chess::MoveType::EnPassant
+        || !chess::is_empty(chess::piece_at(board, move.to));
+}
+
 void test_knight_in_center() {
     chess::Board board = chess::board_from_fen("8/8/8/8/3N4/8/8/8 w - - 0 1");
 
@@ -271,6 +284,34 @@ void test_tactical_moves_include_en_passant() {
     assert(!contains_move(moves, 36, 44));
 }
 
+void test_tactical_moves_match_filtered_legal_moves() {
+    chess::Board board = chess::board_from_fen("r3k2r/1P3ppp/8/3pP3/3Nq3/8/PPP2PPP/R3K2R w KQkq d6 0 1");
+
+    std::vector<chess::Move> legal_moves = chess::generate_legal_moves(board);
+    std::vector<chess::Move> tactical_moves = chess::generate_tactical_moves(board);
+    int expected_count = 0;
+
+    for (chess::Move legal_move : legal_moves) {
+        if (!is_tactical_test_move(board, legal_move)) {
+            continue;
+        }
+
+        ++expected_count;
+        bool found = false;
+
+        for (chess::Move tactical_move : tactical_moves) {
+            if (same_move(legal_move, tactical_move)) {
+                found = true;
+                break;
+            }
+        }
+
+        assert(found);
+    }
+
+    assert(static_cast<int>(tactical_moves.size()) == expected_count);
+}
+
 } 
 
 int main() {
@@ -297,6 +338,7 @@ int main() {
     test_tactical_moves_include_captures_only();
     test_tactical_moves_include_promotions();
     test_tactical_moves_include_en_passant();
+    test_tactical_moves_match_filtered_legal_moves();
 
     return 0;
 }
