@@ -15,6 +15,7 @@ void generate_king_moves(const Board& board, int from, std::vector<Move>& moves)
 void generate_castling_moves(const Board& board, int from, std::vector<Move>& moves);
 void generate_sliding_moves(const Board& board, int from, const int directions[][2], int direction_count, std::vector<Move>& moves);
 void add_pawn_move(int from, int to, bool is_promotion, std::vector<Move>& moves);
+bool is_tactical_move(const Board& board, Move move);
 
 } 
 
@@ -67,6 +68,19 @@ std::vector<Move> generate_legal_moves(const Board& board) {
     }
 
     return legal_moves;
+}
+
+std::vector<Move> generate_tactical_moves(const Board& board) {
+    std::vector<Move> tactical_moves;
+    std::vector<Move> legal_moves = generate_legal_moves(board);
+
+    for (Move move : legal_moves) {
+        if (is_tactical_move(board, move)) {
+            tactical_moves.push_back(move);
+        }
+    }
+
+    return tactical_moves;
 }
 
 namespace {
@@ -300,6 +314,12 @@ void add_pawn_move(int from, int to, bool is_promotion, std::vector<Move>& moves
     moves.push_back(Move{from, to, MoveType::Promotion, PieceType::Rook});
     moves.push_back(Move{from, to, MoveType::Promotion, PieceType::Bishop});
     moves.push_back(Move{from, to, MoveType::Promotion, PieceType::Knight});
+}
+
+bool is_tactical_move(const Board& board, Move move) {
+    return move.type == MoveType::Promotion
+        || move.type == MoveType::EnPassant
+        || !is_empty(piece_at(board, move.to));
 }
 
 } 

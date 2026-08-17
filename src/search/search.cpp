@@ -30,10 +30,6 @@ int evaluate_for_side_to_move(const Board& board) {
     return board.side_to_move == Color::White ? score : -score;
 }
 
-bool is_tactical_move(const Board& board, Move move) {
-    return move.type == MoveType::Promotion || !is_empty(piece_at(board, move.to)) || move.type == MoveType::EnPassant;
-}
-
 int captured_square_for_move(Move move, Piece moving_piece) {
     if (move.type == MoveType::EnPassant) {
         return moving_piece.color == Color::White ? move.to - 8 : move.to + 8;
@@ -185,14 +181,10 @@ int quiescence(Board& board, int alpha, int beta, SearchStats& stats) {
         alpha = stand_pat;
     }
 
-    std::vector<Move> moves = generate_legal_moves(board);
+    std::vector<Move> moves = generate_tactical_moves(board);
     order_moves(board, moves);
 
     for (Move move : moves) {
-        if (!is_tactical_move(board, move)) {
-            continue;
-        }
-
         UndoState undo{};
 
         if (!make_move(board, move, undo)) {

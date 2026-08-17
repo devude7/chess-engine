@@ -244,6 +244,33 @@ void test_castling_blocked_by_attacked_square() {
     assert(contains_move(moves, 4, 2, chess::MoveType::Castling, chess::PieceType::None));
 }
 
+void test_tactical_moves_include_captures_only() {
+    chess::Board board = chess::board_from_fen("4k3/8/8/4q3/4R3/8/8/4K3 w - - 0 1");
+
+    std::vector<chess::Move> moves = chess::generate_tactical_moves(board);
+
+    assert(contains_move(moves, 28, 36));
+    assert(!contains_move(moves, 28, 29));
+}
+
+void test_tactical_moves_include_promotions() {
+    chess::Board board = chess::board_from_fen("7k/4P3/8/8/8/8/8/4K3 w - - 0 1");
+
+    std::vector<chess::Move> moves = chess::generate_tactical_moves(board);
+
+    assert(moves.size() == 4);
+    assert(contains_move(moves, 52, 60, chess::MoveType::Promotion, chess::PieceType::Queen));
+}
+
+void test_tactical_moves_include_en_passant() {
+    chess::Board board = chess::board_from_fen("8/8/8/3pP3/8/8/8/4K2k w - d6 0 1");
+
+    std::vector<chess::Move> moves = chess::generate_tactical_moves(board);
+
+    assert(contains_move(moves, 36, 43, chess::MoveType::EnPassant, chess::PieceType::None));
+    assert(!contains_move(moves, 36, 44));
+}
+
 } 
 
 int main() {
@@ -267,6 +294,9 @@ int main() {
     test_castling_moves_are_generated();
     test_castling_blocked_by_piece();
     test_castling_blocked_by_attacked_square();
+    test_tactical_moves_include_captures_only();
+    test_tactical_moves_include_promotions();
+    test_tactical_moves_include_en_passant();
 
     return 0;
 }
