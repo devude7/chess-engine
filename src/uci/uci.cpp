@@ -213,11 +213,14 @@ void run_uci_loop(std::istream& input, std::ostream& output) {
             SearchResult result = find_best_move(state.board, depth, state.position_history);
             auto end_time = std::chrono::steady_clock::now();
             auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+            std::uint64_t nps = elapsed_ms > 0 ? result.stats.nodes * 1000 / static_cast<std::uint64_t>(elapsed_ms) : result.stats.nodes;
             std::string best_move_text = move_to_uci(result.best_move);
 
             output << "info depth " << depth
                    << " score cp " << result.score
                    << " time " << elapsed_ms
+                   << " nodes " << result.stats.nodes
+                   << " nps " << nps
                    << " pv " << best_move_text << '\n';
             output << "bestmove " << best_move_text << '\n';
             output.flush();

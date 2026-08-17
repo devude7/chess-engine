@@ -1,6 +1,7 @@
 #include "chess/search/search.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <limits>
 #include <string>
 #include <vector>
@@ -51,9 +52,11 @@ bool contains_position(const std::vector<std::string>& positions, const std::str
     return std::find(positions.begin(), positions.end(), key) != positions.end();
 }
 
-int negamax(Board& board, int depth, int alpha, int beta) {
+int negamax(Board& board, int depth, int alpha, int beta, SearchStats& stats) {
+    ++stats.nodes;
+
     if (depth == 0) {
-        return quiescence(board, alpha, beta);
+        return quiescence(board, alpha, beta, stats);
     }
 
     std::vector<Move> moves = generate_legal_moves(board);
@@ -76,7 +79,7 @@ int negamax(Board& board, int depth, int alpha, int beta) {
             continue;
         }
 
-        int score = -negamax(board, depth - 1, -beta, -alpha);
+        int score = -negamax(board, depth - 1, -beta, -alpha, stats);
         undo_move(board, move, undo);
 
         if (score > best_score) {
@@ -103,9 +106,10 @@ SearchResult find_best_move(Board& board, int depth) {
 
 SearchResult find_best_move(Board& board, int depth, const std::vector<std::string>& recent_positions) {
     std::vector<Move> moves = generate_legal_moves(board);
+    SearchStats stats{1};
 
     if (moves.empty() || depth <= 0) {
-        return SearchResult{no_move(), evaluate_for_side_to_move(board)};
+        return SearchResult{no_move(), evaluate_for_side_to_move(board), stats};
     }
 
     Move best_move = moves.front();
@@ -121,7 +125,7 @@ SearchResult find_best_move(Board& board, int depth, const std::vector<std::stri
             continue;
         }
 
-        int score = -negamax(board, depth - 1, -beta, -alpha);
+        int score = -negamax(board, depth - 1, -beta, -alpha, stats);
 
         if (contains_position(recent_positions, position_key(board))) {
             score -= RepetitionPenalty;
@@ -139,7 +143,7 @@ SearchResult find_best_move(Board& board, int depth, const std::vector<std::stri
         }
     }
 
-    return SearchResult{best_move, best_score};
+    return SearchResult{best_move, best_score, stats};
 }
 
 int move_order_score(const Board& board, Move move) {
@@ -164,6 +168,13 @@ int move_order_score(const Board& board, Move move) {
 }
 
 int quiescence(Board& board, int alpha, int beta) {
+    SearchStats stats{0};
+    return quiescence(board, alpha, beta, stats);
+}
+
+int quiescence(Board& board, int alpha, int beta, SearchStats& stats) {
+    ++stats.nodes;
+
     int stand_pat = evaluate_for_side_to_move(board);
 
     if (stand_pat >= beta) {
@@ -188,7 +199,7 @@ int quiescence(Board& board, int alpha, int beta) {
             continue;
         }
 
-        int score = -quiescence(board, -beta, -alpha);
+        int score = -quiescence(board, -beta, -alpha, stats);
         undo_move(board, move, undo);
 
         if (score >= beta) {

@@ -16,6 +16,7 @@ void test_find_best_move_returns_legal_move_in_start_position() {
 
     assert(result.best_move.from != chess::NoSquare);
     assert(result.best_move.to != chess::NoSquare);
+    assert(result.stats.nodes > 0);
 }
 
 void test_find_best_move_captures_high_value_piece() {
