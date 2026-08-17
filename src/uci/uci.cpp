@@ -1,5 +1,6 @@
 #include "chess/uci/uci.hpp"
 
+#include <chrono>
 #include <cstdlib>
 #include <iostream>
 #include <optional>
@@ -18,7 +19,7 @@ namespace chess {
 namespace {
 
 constexpr const char* StartPositionFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-constexpr int DefaultSearchDepth = 5;
+constexpr int DefaultSearchDepth = 6;
 
 struct PositionState {
     Board board;
@@ -193,22 +194,32 @@ void run_uci_loop(std::istream& input, std::ostream& output) {
         } else if (line.rfind("position", 0) == 0) {
             state = position_state_from_command(line, state);
         } else if (line.rfind("go", 0) == 0) {
+            int depth = depth_from_go_command(line);
             std::optional<std::string> book_move_text = opening_book_move(state.move_history);
 
             if (book_move_text.has_value()) {
                 Move book_move = move_from_uci(state.board, *book_move_text);
 
                 if (book_move.from != NoSquare && book_move.to != NoSquare) {
+                    output << "info string book move\n";
+                    output << "info depth 0 score cp 0 time 0 pv " << *book_move_text << '\n';
                     output << "bestmove " << *book_move_text << '\n';
                     output.flush();
                     continue;
                 }
             }
 
-            int depth = depth_from_go_command(line);
+            auto start_time = std::chrono::steady_clock::now();
             SearchResult result = find_best_move(state.board, depth, state.position_history);
+            auto end_time = std::chrono::steady_clock::now();
+            auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+            std::string best_move_text = move_to_uci(result.best_move);
 
-            output << "bestmove " << move_to_uci(result.best_move) << '\n';
+            output << "info depth " << depth
+                   << " score cp " << result.score
+                   << " time " << elapsed_ms
+                   << " pv " << best_move_text << '\n';
+            output << "bestmove " << best_move_text << '\n';
             output.flush();
         } else if (line == "quit") {
             break;
