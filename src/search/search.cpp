@@ -41,6 +41,8 @@ using TranspositionTable = std::unordered_map<std::uint64_t, TranspositionEntry>
 struct SearchContext {
     SearchStats stats;
     TranspositionTable table;
+    std::function<bool()> should_stop;
+    bool stopped;
 };
 
 Move no_move() {
@@ -104,6 +106,11 @@ Move tt_best_move(const TranspositionTable& table, std::uint64_t key) {
 int negamax(Board& board, int depth, int alpha, int beta, SearchContext& context) {
     ++context.stats.nodes;
 
+    if (context.should_stop && context.should_stop()) {
+        context.stopped = true;
+        return evaluate_for_side_to_move(board);
+    }
+
     if (depth == 0) {
         return quiescence(board, alpha, beta, context.stats);
     }
@@ -162,6 +169,10 @@ int negamax(Board& board, int depth, int alpha, int beta, SearchContext& context
         int score = -negamax(board, depth - 1, -beta, -alpha, context);
         undo_move(board, move, undo);
 
+        if (context.stopped) {
+            return evaluate_for_side_to_move(board);
+        }
+
         if (score > best_score) {
             best_score = score;
             best_move = move;
@@ -211,6 +222,7 @@ SearchResult find_best_move_with_context(
     int alpha = -Infinity;
     int beta = Infinity;
     order_moves(board, moves, root_tt_move, has_root_tt_move);
+    bool searched_move = false;
 
     for (Move move : moves) {
         UndoState undo{};
@@ -227,6 +239,12 @@ SearchResult find_best_move_with_context(
 
         undo_move(board, move, undo);
 
+        if (context.stopped) {
+            break;
+        }
+
+        searched_move = true;
+
         if (score > best_score) {
             best_score = score;
             best_move = move;
@@ -237,7 +255,13 @@ SearchResult find_best_move_with_context(
         }
     }
 
-    context.table[key] = TranspositionEntry{depth, best_score, BoundType::Exact, best_move, best_move.from != NoSquare};
+    if (!searched_move) {
+        return SearchResult{best_move, evaluate_for_side_to_move(board), context.stats};
+    }
+
+    if (!context.stopped) {
+        context.table[key] = TranspositionEntry{depth, best_score, BoundType::Exact, best_move, best_move.from != NoSquare};
+    }
 
     return SearchResult{best_move, best_score, context.stats};
 }
@@ -249,7 +273,7 @@ SearchResult find_best_move(Board& board, int depth) {
 }
 
 SearchResult find_best_move(Board& board, int depth, const std::vector<std::string>& recent_positions) {
-    SearchContext context{SearchStats{0, 0}, TranspositionTable{}};
+    SearchContext context{SearchStats{0, 0}, TranspositionTable{}, std::function<bool()>{}, false};
     return find_best_move_with_context(board, depth, recent_positions, context);
 }
 
@@ -259,14 +283,41 @@ SearchResult find_best_move_iterative(
     const std::vector<std::string>& recent_positions,
     const std::function<void(int, const SearchResult&)>& on_depth_finished
 ) {
-    SearchContext context{SearchStats{0, 0}, TranspositionTable{}};
+    return find_best_move_iterative(board, max_depth, recent_positions, on_depth_finished, std::function<bool()>{});
+}
+
+SearchResult find_best_move_iterative(
+    Board& board,
+    int max_depth,
+    const std::vector<std::string>& recent_positions,
+    const std::function<void(int, const SearchResult&)>& on_depth_finished,
+    const std::function<bool()>& should_stop
+) {
+    SearchContext context{SearchStats{0, 0}, TranspositionTable{}, should_stop, false};
     SearchResult result{no_move(), evaluate_for_side_to_move(board), context.stats};
+    bool completed_depth = false;
 
     for (int depth = 1; depth <= max_depth; ++depth) {
-        result = find_best_move_with_context(board, depth, recent_positions, context);
+        context.stopped = false;
+        SearchResult depth_result = find_best_move_with_context(board, depth, recent_positions, context);
+
+        if (context.stopped) {
+            if (!completed_depth) {
+                result = depth_result;
+            }
+
+            break;
+        }
+
+        result = depth_result;
+        completed_depth = true;
 
         if (on_depth_finished) {
             on_depth_finished(depth, result);
+        }
+
+        if (context.should_stop && context.should_stop()) {
+            break;
         }
     }
 

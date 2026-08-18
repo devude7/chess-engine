@@ -20,6 +20,13 @@ namespace {
 
 constexpr const char* StartPositionFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 constexpr int DefaultSearchDepth = 6;
+constexpr int MaxSearchDepth = 64;
+
+struct GoOptions {
+    int depth;
+    int movetime_ms;
+    bool has_movetime;
+};
 
 struct PositionState {
     Board board;
@@ -152,22 +159,29 @@ PositionState position_state_from_command(const std::string& line, const Positio
     return current_state;
 }
 
-int depth_from_go_command(const std::string& line) {
+GoOptions options_from_go_command(const std::string& line) {
     std::vector<std::string> words = split_words(line);
+    GoOptions options{DefaultSearchDepth, 0, false};
 
     for (int index = 0; index + 1 < static_cast<int>(words.size()); ++index) {
         if (words[index] == "depth") {
-            int depth = DefaultSearchDepth;
+            int parsed_depth = DefaultSearchDepth;
 
-            if (parse_int(words[index + 1], depth) && depth > 0) {
-                return depth;
+            if (parse_int(words[index + 1], parsed_depth) && parsed_depth > 0) {
+                options.depth = parsed_depth;
             }
+        } else if (words[index] == "movetime") {
+            int parsed_movetime = 0;
 
-            return DefaultSearchDepth;
+            if (parse_int(words[index + 1], parsed_movetime) && parsed_movetime > 0) {
+                options.movetime_ms = parsed_movetime;
+                options.has_movetime = true;
+                options.depth = MaxSearchDepth;
+            }
         }
     }
 
-    return DefaultSearchDepth;
+    return options;
 }
 
 }
@@ -194,7 +208,7 @@ void run_uci_loop(std::istream& input, std::ostream& output) {
         } else if (line.rfind("position", 0) == 0) {
             state = position_state_from_command(line, state);
         } else if (line.rfind("go", 0) == 0) {
-            int depth = depth_from_go_command(line);
+            GoOptions go_options = options_from_go_command(line);
             std::optional<std::string> book_move_text = opening_book_move(state.move_history);
 
             if (book_move_text.has_value()) {
@@ -210,9 +224,10 @@ void run_uci_loop(std::istream& input, std::ostream& output) {
             }
 
             auto search_start_time = std::chrono::steady_clock::now();
+            auto search_deadline = search_start_time + std::chrono::milliseconds(go_options.movetime_ms);
             SearchResult final_result = find_best_move_iterative(
                 state.board,
-                depth,
+                go_options.depth,
                 state.position_history,
                 [&output, search_start_time](int current_depth, const SearchResult& result) {
                     auto current_time = std::chrono::steady_clock::now();
@@ -228,6 +243,9 @@ void run_uci_loop(std::istream& input, std::ostream& output) {
                            << " tthits " << result.stats.tt_hits
                            << " pv " << best_move_text << '\n';
                     output.flush();
+                },
+                [go_options, search_deadline]() {
+                    return go_options.has_movetime && std::chrono::steady_clock::now() >= search_deadline;
                 }
             );
 
