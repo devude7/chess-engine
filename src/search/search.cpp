@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "chess/board/position_key.hpp"
+#include "chess/board/zobrist.hpp"
 #include "chess/core/square.hpp"
 #include "chess/movegen/attack.hpp"
 #include "chess/movegen/move_generator.hpp"
@@ -31,9 +32,11 @@ struct TranspositionEntry {
     int depth;
     int score;
     BoundType bound;
+    Move best_move;
+    bool has_best_move;
 };
 
-using TranspositionTable = std::unordered_map<std::string, TranspositionEntry>;
+using TranspositionTable = std::unordered_map<std::uint64_t, TranspositionEntry>;
 
 struct SearchContext {
     SearchStats stats;
@@ -42,6 +45,13 @@ struct SearchContext {
 
 Move no_move() {
     return Move{NoSquare, NoSquare, MoveType::Normal, PieceType::None};
+}
+
+bool same_move(Move left, Move right) {
+    return left.from == right.from
+        && left.to == right.to
+        && left.type == right.type
+        && left.promotion == right.promotion;
 }
 
 int evaluate_for_side_to_move(const Board& board) {
@@ -58,10 +68,23 @@ int captured_square_for_move(Move move, Piece moving_piece) {
     return move.to;
 }
 
-void order_moves(const Board& board, std::vector<Move>& moves) {
-    std::sort(moves.begin(), moves.end(), [&board](Move left, Move right) {
+void order_moves(const Board& board, std::vector<Move>& moves, Move tt_move, bool has_tt_move) {
+    std::sort(moves.begin(), moves.end(), [&board, tt_move, has_tt_move](Move left, Move right) {
+        if (has_tt_move) {
+            bool left_is_tt_move = same_move(left, tt_move);
+            bool right_is_tt_move = same_move(right, tt_move);
+
+            if (left_is_tt_move != right_is_tt_move) {
+                return left_is_tt_move;
+            }
+        }
+
         return move_order_score(board, left) > move_order_score(board, right);
     });
+}
+
+void order_moves(const Board& board, std::vector<Move>& moves) {
+    order_moves(board, moves, no_move(), false);
 }
 
 bool contains_position(const std::vector<std::string>& positions, const std::string& key) {
@@ -77,25 +100,31 @@ int negamax(Board& board, int depth, int alpha, int beta, SearchContext& context
 
     int original_alpha = alpha;
     int original_beta = beta;
-    std::string key = position_key(board);
+    std::uint64_t key = zobrist_hash(board);
     auto found = context.table.find(key);
+    Move tt_move = no_move();
+    bool has_tt_move = false;
 
-    if (found != context.table.end() && found->second.depth >= depth) {
+    if (found != context.table.end()) {
         const TranspositionEntry& entry = found->second;
+        tt_move = entry.best_move;
+        has_tt_move = entry.has_best_move;
 
-        if (entry.bound == BoundType::Exact) {
-            ++context.stats.tt_hits;
-            return entry.score;
-        }
+        if (entry.depth >= depth) {
+            if (entry.bound == BoundType::Exact) {
+                ++context.stats.tt_hits;
+                return entry.score;
+            }
 
-        if (entry.bound == BoundType::LowerBound && entry.score >= beta) {
-            ++context.stats.tt_hits;
-            return entry.score;
-        }
+            if (entry.bound == BoundType::LowerBound && entry.score >= beta) {
+                ++context.stats.tt_hits;
+                return entry.score;
+            }
 
-        if (entry.bound == BoundType::UpperBound && entry.score <= alpha) {
-            ++context.stats.tt_hits;
-            return entry.score;
+            if (entry.bound == BoundType::UpperBound && entry.score <= alpha) {
+                ++context.stats.tt_hits;
+                return entry.score;
+            }
         }
     }
 
@@ -110,7 +139,8 @@ int negamax(Board& board, int depth, int alpha, int beta, SearchContext& context
     }
 
     int best_score = std::numeric_limits<int>::min();
-    order_moves(board, moves);
+    Move best_move = no_move();
+    order_moves(board, moves, tt_move, has_tt_move);
 
     for (Move move : moves) {
         UndoState undo{};
@@ -124,6 +154,7 @@ int negamax(Board& board, int depth, int alpha, int beta, SearchContext& context
 
         if (score > best_score) {
             best_score = score;
+            best_move = move;
         }
 
         if (score > alpha) {
@@ -143,7 +174,7 @@ int negamax(Board& board, int depth, int alpha, int beta, SearchContext& context
         bound = BoundType::LowerBound;
     }
 
-    context.table[key] = TranspositionEntry{depth, best_score, bound};
+    context.table[key] = TranspositionEntry{depth, best_score, bound, best_move, best_move.from != NoSquare};
 
     return best_score;
 }

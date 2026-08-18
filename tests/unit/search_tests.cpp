@@ -93,6 +93,14 @@ void test_repetition_penalty_can_change_root_choice() {
     assert(changed_move || penalized_same_move);
 }
 
+void test_transposition_table_is_used_during_deeper_search() {
+    chess::Board board = chess::board_from_fen("8/8/8/8/8/8/8/R3K2k w Q - 0 1");
+
+    chess::SearchResult result = chess::find_best_move(board, 4);
+
+    assert(result.stats.tt_hits > 0);
+}
+
 }
 
 int main() {
@@ -104,6 +112,7 @@ int main() {
     test_quiescence_returns_static_evaluation_in_quiet_position();
     test_quiescence_sees_immediate_capture();
     test_repetition_penalty_can_change_root_choice();
+    test_transposition_table_is_used_during_deeper_search();
 
     return 0;
 }
