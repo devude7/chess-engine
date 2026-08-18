@@ -91,6 +91,16 @@ bool contains_position(const std::vector<std::string>& positions, const std::str
     return std::find(positions.begin(), positions.end(), key) != positions.end();
 }
 
+Move tt_best_move(const TranspositionTable& table, std::uint64_t key) {
+    auto found = table.find(key);
+
+    if (found == table.end() || !found->second.has_best_move) {
+        return no_move();
+    }
+
+    return found->second.best_move;
+}
+
 int negamax(Board& board, int depth, int alpha, int beta, SearchContext& context) {
     ++context.stats.nodes;
 
@@ -179,25 +189,28 @@ int negamax(Board& board, int depth, int alpha, int beta, SearchContext& context
     return best_score;
 }
 
-}
+SearchResult find_best_move_with_context(
+    Board& board,
+    int depth,
+    const std::vector<std::string>& recent_positions,
+    SearchContext& context
+) {
+    ++context.stats.nodes;
 
-SearchResult find_best_move(Board& board, int depth) {
-    return find_best_move(board, depth, std::vector<std::string>{});
-}
-
-SearchResult find_best_move(Board& board, int depth, const std::vector<std::string>& recent_positions) {
     std::vector<Move> moves = generate_legal_moves(board);
-    SearchContext context{SearchStats{1, 0}, TranspositionTable{}};
 
     if (moves.empty() || depth <= 0) {
         return SearchResult{no_move(), evaluate_for_side_to_move(board), context.stats};
     }
 
+    std::uint64_t key = zobrist_hash(board);
+    Move root_tt_move = tt_best_move(context.table, key);
+    bool has_root_tt_move = root_tt_move.from != NoSquare;
     Move best_move = moves.front();
     int best_score = std::numeric_limits<int>::min();
     int alpha = -Infinity;
     int beta = Infinity;
-    order_moves(board, moves);
+    order_moves(board, moves, root_tt_move, has_root_tt_move);
 
     for (Move move : moves) {
         UndoState undo{};
@@ -224,7 +237,40 @@ SearchResult find_best_move(Board& board, int depth, const std::vector<std::stri
         }
     }
 
+    context.table[key] = TranspositionEntry{depth, best_score, BoundType::Exact, best_move, best_move.from != NoSquare};
+
     return SearchResult{best_move, best_score, context.stats};
+}
+
+}
+
+SearchResult find_best_move(Board& board, int depth) {
+    return find_best_move(board, depth, std::vector<std::string>{});
+}
+
+SearchResult find_best_move(Board& board, int depth, const std::vector<std::string>& recent_positions) {
+    SearchContext context{SearchStats{0, 0}, TranspositionTable{}};
+    return find_best_move_with_context(board, depth, recent_positions, context);
+}
+
+SearchResult find_best_move_iterative(
+    Board& board,
+    int max_depth,
+    const std::vector<std::string>& recent_positions,
+    const std::function<void(int, const SearchResult&)>& on_depth_finished
+) {
+    SearchContext context{SearchStats{0, 0}, TranspositionTable{}};
+    SearchResult result{no_move(), evaluate_for_side_to_move(board), context.stats};
+
+    for (int depth = 1; depth <= max_depth; ++depth) {
+        result = find_best_move_with_context(board, depth, recent_positions, context);
+
+        if (on_depth_finished) {
+            on_depth_finished(depth, result);
+        }
+    }
+
+    return result;
 }
 
 int move_order_score(const Board& board, Move move) {

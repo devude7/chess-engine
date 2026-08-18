@@ -209,27 +209,27 @@ void run_uci_loop(std::istream& input, std::ostream& output) {
                 }
             }
 
-            SearchResult final_result{};
+            auto search_start_time = std::chrono::steady_clock::now();
+            SearchResult final_result = find_best_move_iterative(
+                state.board,
+                depth,
+                state.position_history,
+                [&output, search_start_time](int current_depth, const SearchResult& result) {
+                    auto current_time = std::chrono::steady_clock::now();
+                    auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(current_time - search_start_time).count();
+                    std::uint64_t nps = elapsed_ms > 0 ? result.stats.nodes * 1000 / static_cast<std::uint64_t>(elapsed_ms) : result.stats.nodes;
+                    std::string best_move_text = move_to_uci(result.best_move);
 
-            for (int current_depth = 1; current_depth <= depth; ++current_depth) {
-                auto start_time = std::chrono::steady_clock::now();
-                SearchResult result = find_best_move(state.board, current_depth, state.position_history);
-                auto end_time = std::chrono::steady_clock::now();
-                auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
-                std::uint64_t nps = elapsed_ms > 0 ? result.stats.nodes * 1000 / static_cast<std::uint64_t>(elapsed_ms) : result.stats.nodes;
-                std::string best_move_text = move_to_uci(result.best_move);
-
-                final_result = result;
-
-                output << "info depth " << current_depth
-                       << " score cp " << result.score
-                       << " time " << elapsed_ms
-                       << " nodes " << result.stats.nodes
-                       << " nps " << nps
-                       << " tthits " << result.stats.tt_hits
-                       << " pv " << best_move_text << '\n';
-                output.flush();
-            }
+                    output << "info depth " << current_depth
+                           << " score cp " << result.score
+                           << " time " << elapsed_ms
+                           << " nodes " << result.stats.nodes
+                           << " nps " << nps
+                           << " tthits " << result.stats.tt_hits
+                           << " pv " << best_move_text << '\n';
+                    output.flush();
+                }
+            );
 
             output << "bestmove " << move_to_uci(final_result.best_move) << '\n';
             output.flush();

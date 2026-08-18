@@ -101,6 +101,26 @@ void test_transposition_table_is_used_during_deeper_search() {
     assert(result.stats.tt_hits > 0);
 }
 
+void test_iterative_search_reports_each_completed_depth() {
+    chess::Board board = chess::board_from_fen("8/8/8/8/8/8/8/R3K2k w Q - 0 1");
+    std::vector<int> completed_depths;
+
+    chess::SearchResult result = chess::find_best_move_iterative(
+        board,
+        3,
+        std::vector<std::string>{},
+        [&completed_depths](int depth, const chess::SearchResult&) {
+            completed_depths.push_back(depth);
+        }
+    );
+
+    assert(result.best_move.from != chess::NoSquare);
+    assert(completed_depths.size() == 3);
+    assert(completed_depths[0] == 1);
+    assert(completed_depths[1] == 2);
+    assert(completed_depths[2] == 3);
+}
+
 }
 
 int main() {
@@ -113,6 +133,7 @@ int main() {
     test_quiescence_sees_immediate_capture();
     test_repetition_penalty_can_change_root_choice();
     test_transposition_table_is_used_during_deeper_search();
+    test_iterative_search_reports_each_completed_depth();
 
     return 0;
 }
