@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <limits>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "chess/board/position_key.hpp"
@@ -19,6 +20,25 @@ namespace {
 constexpr int Infinity = 1000000;
 constexpr int MateScore = 100000;
 constexpr int RepetitionPenalty = 200;
+
+enum class BoundType {
+    Exact,
+    LowerBound,
+    UpperBound
+};
+
+struct TranspositionEntry {
+    int depth;
+    int score;
+    BoundType bound;
+};
+
+using TranspositionTable = std::unordered_map<std::string, TranspositionEntry>;
+
+struct SearchContext {
+    SearchStats stats;
+    TranspositionTable table;
+};
 
 Move no_move() {
     return Move{NoSquare, NoSquare, MoveType::Normal, PieceType::None};
@@ -48,11 +68,35 @@ bool contains_position(const std::vector<std::string>& positions, const std::str
     return std::find(positions.begin(), positions.end(), key) != positions.end();
 }
 
-int negamax(Board& board, int depth, int alpha, int beta, SearchStats& stats) {
-    ++stats.nodes;
+int negamax(Board& board, int depth, int alpha, int beta, SearchContext& context) {
+    ++context.stats.nodes;
 
     if (depth == 0) {
-        return quiescence(board, alpha, beta, stats);
+        return quiescence(board, alpha, beta, context.stats);
+    }
+
+    int original_alpha = alpha;
+    int original_beta = beta;
+    std::string key = position_key(board);
+    auto found = context.table.find(key);
+
+    if (found != context.table.end() && found->second.depth >= depth) {
+        const TranspositionEntry& entry = found->second;
+
+        if (entry.bound == BoundType::Exact) {
+            ++context.stats.tt_hits;
+            return entry.score;
+        }
+
+        if (entry.bound == BoundType::LowerBound && entry.score >= beta) {
+            ++context.stats.tt_hits;
+            return entry.score;
+        }
+
+        if (entry.bound == BoundType::UpperBound && entry.score <= alpha) {
+            ++context.stats.tt_hits;
+            return entry.score;
+        }
     }
 
     std::vector<Move> moves = generate_legal_moves(board);
@@ -75,7 +119,7 @@ int negamax(Board& board, int depth, int alpha, int beta, SearchStats& stats) {
             continue;
         }
 
-        int score = -negamax(board, depth - 1, -beta, -alpha, stats);
+        int score = -negamax(board, depth - 1, -beta, -alpha, context);
         undo_move(board, move, undo);
 
         if (score > best_score) {
@@ -91,6 +135,16 @@ int negamax(Board& board, int depth, int alpha, int beta, SearchStats& stats) {
         }
     }
 
+    BoundType bound = BoundType::Exact;
+
+    if (best_score <= original_alpha) {
+        bound = BoundType::UpperBound;
+    } else if (best_score >= original_beta) {
+        bound = BoundType::LowerBound;
+    }
+
+    context.table[key] = TranspositionEntry{depth, best_score, bound};
+
     return best_score;
 }
 
@@ -102,10 +156,10 @@ SearchResult find_best_move(Board& board, int depth) {
 
 SearchResult find_best_move(Board& board, int depth, const std::vector<std::string>& recent_positions) {
     std::vector<Move> moves = generate_legal_moves(board);
-    SearchStats stats{1};
+    SearchContext context{SearchStats{1, 0}, TranspositionTable{}};
 
     if (moves.empty() || depth <= 0) {
-        return SearchResult{no_move(), evaluate_for_side_to_move(board), stats};
+        return SearchResult{no_move(), evaluate_for_side_to_move(board), context.stats};
     }
 
     Move best_move = moves.front();
@@ -121,7 +175,7 @@ SearchResult find_best_move(Board& board, int depth, const std::vector<std::stri
             continue;
         }
 
-        int score = -negamax(board, depth - 1, -beta, -alpha, stats);
+        int score = -negamax(board, depth - 1, -beta, -alpha, context);
 
         if (contains_position(recent_positions, position_key(board))) {
             score -= RepetitionPenalty;
@@ -139,7 +193,7 @@ SearchResult find_best_move(Board& board, int depth, const std::vector<std::stri
         }
     }
 
-    return SearchResult{best_move, best_score, stats};
+    return SearchResult{best_move, best_score, context.stats};
 }
 
 int move_order_score(const Board& board, Move move) {
@@ -164,7 +218,7 @@ int move_order_score(const Board& board, Move move) {
 }
 
 int quiescence(Board& board, int alpha, int beta) {
-    SearchStats stats{0};
+    SearchStats stats{0, 0};
     return quiescence(board, alpha, beta, stats);
 }
 

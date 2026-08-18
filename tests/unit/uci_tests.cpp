@@ -75,6 +75,7 @@ void test_go_outputs_search_info() {
     assert(text.find("time ") != std::string::npos);
     assert(text.find("nodes ") != std::string::npos);
     assert(text.find("nps ") != std::string::npos);
+    assert(text.find("tthits ") != std::string::npos);
     assert(text.find("pv ") != std::string::npos);
 }
 

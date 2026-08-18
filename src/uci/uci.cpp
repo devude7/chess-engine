@@ -221,6 +221,7 @@ void run_uci_loop(std::istream& input, std::ostream& output) {
                    << " time " << elapsed_ms
                    << " nodes " << result.stats.nodes
                    << " nps " << nps
+                   << " tthits " << result.stats.tt_hits
                    << " pv " << best_move_text << '\n';
             output << "bestmove " << best_move_text << '\n';
             output.flush();

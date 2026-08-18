@@ -11,6 +11,7 @@ namespace chess {
 
 struct SearchStats {
     std::uint64_t nodes;
+    std::uint64_t tt_hits;
 };
 
 struct SearchResult {
