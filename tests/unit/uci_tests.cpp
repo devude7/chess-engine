@@ -79,6 +79,19 @@ void test_go_outputs_search_info() {
     assert(text.find("pv ") != std::string::npos);
 }
 
+void test_go_depth_outputs_each_iterative_depth() {
+    std::istringstream input("position fen 8/8/8/8/8/8/8/4K2k w - - 0 1\ngo depth 3\nquit\n");
+    std::ostringstream output;
+
+    chess::run_uci_loop(input, output);
+
+    std::string text = output.str();
+    assert(text.find("info depth 1") != std::string::npos);
+    assert(text.find("info depth 2") != std::string::npos);
+    assert(text.find("info depth 3") != std::string::npos);
+    assert(text.find("bestmove ") != std::string::npos);
+}
+
 }
 
 int main() {
@@ -89,6 +102,7 @@ int main() {
     test_opening_book_plays_first_move();
     test_invalid_depth_falls_back_to_default();
     test_go_outputs_search_info();
+    test_go_depth_outputs_each_iterative_depth();
 
     return 0;
 }
