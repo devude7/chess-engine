@@ -103,6 +103,29 @@ Move tt_best_move(const TranspositionTable& table, std::uint64_t key) {
     return found->second.best_move;
 }
 
+std::vector<Move> principal_variation_from_table(const Board& board, const TranspositionTable& table, int depth) {
+    std::vector<Move> line;
+    Board current_board = board;
+
+    for (int ply = 0; ply < depth; ++ply) {
+        Move move = tt_best_move(table, zobrist_hash(current_board));
+
+        if (move.from == NoSquare || move.to == NoSquare) {
+            break;
+        }
+
+        UndoState undo{};
+
+        if (!make_move(current_board, move, undo)) {
+            break;
+        }
+
+        line.push_back(move);
+    }
+
+    return line;
+}
+
 int negamax(Board& board, int depth, int alpha, int beta, SearchContext& context) {
     ++context.stats.nodes;
 
@@ -211,7 +234,7 @@ SearchResult find_best_move_with_context(
     std::vector<Move> moves = generate_legal_moves(board);
 
     if (moves.empty() || depth <= 0) {
-        return SearchResult{no_move(), evaluate_for_side_to_move(board), context.stats};
+        return SearchResult{no_move(), {}, evaluate_for_side_to_move(board), context.stats};
     }
 
     std::uint64_t key = zobrist_hash(board);
@@ -256,14 +279,15 @@ SearchResult find_best_move_with_context(
     }
 
     if (!searched_move) {
-        return SearchResult{best_move, evaluate_for_side_to_move(board), context.stats};
+        return SearchResult{best_move, {}, evaluate_for_side_to_move(board), context.stats};
     }
 
     if (!context.stopped) {
         context.table[key] = TranspositionEntry{depth, best_score, BoundType::Exact, best_move, best_move.from != NoSquare};
     }
 
-    return SearchResult{best_move, best_score, context.stats};
+    std::vector<Move> principal_variation = principal_variation_from_table(board, context.table, depth);
+    return SearchResult{best_move, principal_variation, best_score, context.stats};
 }
 
 }
@@ -294,7 +318,7 @@ SearchResult find_best_move_iterative(
     const std::function<bool()>& should_stop
 ) {
     SearchContext context{SearchStats{0, 0}, TranspositionTable{}, should_stop, false};
-    SearchResult result{no_move(), evaluate_for_side_to_move(board), context.stats};
+    SearchResult result{no_move(), {}, evaluate_for_side_to_move(board), context.stats};
     bool completed_depth = false;
 
     for (int depth = 1; depth <= max_depth; ++depth) {

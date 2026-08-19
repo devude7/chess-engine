@@ -17,6 +17,7 @@ struct SearchStats {
 
 struct SearchResult {
     Move best_move;
+    std::vector<Move> principal_variation;
     int score;
     SearchStats stats;
 };

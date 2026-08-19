@@ -92,6 +92,25 @@ void test_go_depth_outputs_each_iterative_depth() {
     assert(text.find("bestmove ") != std::string::npos);
 }
 
+void test_go_depth_outputs_principal_variation_line() {
+    std::istringstream input("position fen 8/8/8/8/8/8/8/R3K2k w Q - 0 1\ngo depth 3\nquit\n");
+    std::ostringstream output;
+
+    chess::run_uci_loop(input, output);
+
+    std::string text = output.str();
+    std::string marker = "info depth 3";
+    std::size_t depth_position = text.find(marker);
+    assert(depth_position != std::string::npos);
+
+    std::size_t pv_position = text.find(" pv ", depth_position);
+    assert(pv_position != std::string::npos);
+
+    std::size_t line_end = text.find('\n', pv_position);
+    std::string pv_line = text.substr(pv_position, line_end - pv_position);
+    assert(pv_line.find(' ', 4) != std::string::npos);
+}
+
 void test_go_movetime_returns_bestmove() {
     std::istringstream input("position fen 8/8/8/8/8/8/8/4K2k w - - 0 1\ngo movetime 10\nquit\n");
     std::ostringstream output;
@@ -125,6 +144,7 @@ int main() {
     test_invalid_depth_falls_back_to_default();
     test_go_outputs_search_info();
     test_go_depth_outputs_each_iterative_depth();
+    test_go_depth_outputs_principal_variation_line();
     test_go_movetime_returns_bestmove();
     test_go_clock_time_returns_bestmove();
 

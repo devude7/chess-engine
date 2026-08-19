@@ -18,6 +18,9 @@ void test_find_best_move_returns_legal_move_in_start_position() {
     assert(result.best_move.to != chess::NoSquare);
     assert(result.stats.nodes > 0);
     assert(result.stats.tt_hits == 0);
+    assert(!result.principal_variation.empty());
+    assert(result.principal_variation.front().from == result.best_move.from);
+    assert(result.principal_variation.front().to == result.best_move.to);
 }
 
 void test_find_best_move_captures_high_value_piece() {
@@ -37,6 +40,7 @@ void test_find_best_move_returns_no_move_when_no_legal_moves_exist() {
 
     assert(result.best_move.from == chess::NoSquare);
     assert(result.best_move.to == chess::NoSquare);
+    assert(result.principal_variation.empty());
 }
 
 void test_capture_scores_higher_than_quiet_move() {
@@ -115,6 +119,7 @@ void test_iterative_search_reports_each_completed_depth() {
     );
 
     assert(result.best_move.from != chess::NoSquare);
+    assert(!result.principal_variation.empty());
     assert(completed_depths.size() == 3);
     assert(completed_depths[0] == 1);
     assert(completed_depths[1] == 2);

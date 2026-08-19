@@ -78,6 +78,24 @@ std::string move_history_key(const std::vector<std::string>& move_history) {
     return key;
 }
 
+std::string principal_variation_text(const SearchResult& result) {
+    if (result.principal_variation.empty()) {
+        return move_to_uci(result.best_move);
+    }
+
+    std::string text;
+
+    for (Move move : result.principal_variation) {
+        if (!text.empty()) {
+            text += ' ';
+        }
+
+        text += move_to_uci(move);
+    }
+
+    return text;
+}
+
 std::optional<std::string> opening_book_move(const std::vector<std::string>& move_history) {
     std::string key = move_history_key(move_history);
 
@@ -303,7 +321,7 @@ void run_uci_loop(std::istream& input, std::ostream& output) {
                     auto current_time = std::chrono::steady_clock::now();
                     auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(current_time - search_start_time).count();
                     std::uint64_t nps = elapsed_ms > 0 ? result.stats.nodes * 1000 / static_cast<std::uint64_t>(elapsed_ms) : result.stats.nodes;
-                    std::string best_move_text = move_to_uci(result.best_move);
+                    std::string pv_text = principal_variation_text(result);
 
                     output << "info depth " << current_depth
                            << " score cp " << result.score
@@ -311,7 +329,7 @@ void run_uci_loop(std::istream& input, std::ostream& output) {
                            << " nodes " << result.stats.nodes
                            << " nps " << nps
                            << " tthits " << result.stats.tt_hits
-                           << " pv " << best_move_text << '\n';
+                           << " pv " << pv_text << '\n';
                     output.flush();
                 },
                 [go_options, search_deadline]() {
