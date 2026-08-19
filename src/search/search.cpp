@@ -1,6 +1,7 @@
 #include "chess/search/search.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <limits>
 #include <string>
@@ -21,6 +22,8 @@ namespace {
 constexpr int Infinity = 1000000;
 constexpr int MateScore = 100000;
 constexpr int RepetitionPenalty = 200;
+constexpr int MaxPly = 128;
+constexpr int KillerMoveScore = 9000;
 
 enum class BoundType {
     Exact,
@@ -37,10 +40,12 @@ struct TranspositionEntry {
 };
 
 using TranspositionTable = std::unordered_map<std::uint64_t, TranspositionEntry>;
+using KillerMoves = std::array<std::array<Move, 2>, MaxPly>;
 
 struct SearchContext {
     SearchStats stats;
     TranspositionTable table;
+    KillerMoves killer_moves;
     std::function<bool()> should_stop;
     bool stopped;
 };
@@ -56,6 +61,21 @@ bool same_move(Move left, Move right) {
         && left.promotion == right.promotion;
 }
 
+KillerMoves empty_killer_moves() {
+    KillerMoves killer_moves{};
+
+    for (auto& ply_killers : killer_moves) {
+        ply_killers[0] = no_move();
+        ply_killers[1] = no_move();
+    }
+
+    return killer_moves;
+}
+
+SearchContext make_search_context(const std::function<bool()>& should_stop = std::function<bool()>{}) {
+    return SearchContext{SearchStats{0, 0}, TranspositionTable{}, empty_killer_moves(), should_stop, false};
+}
+
 int evaluate_for_side_to_move(const Board& board) {
     int score = evaluate(board);
 
@@ -68,6 +88,64 @@ int captured_square_for_move(Move move, Piece moving_piece) {
     }
 
     return move.to;
+}
+
+bool is_capture(const Board& board, Move move) {
+    Piece moving_piece = piece_at(board, move.from);
+    int captured_square = captured_square_for_move(move, moving_piece);
+
+    return is_valid_square(captured_square) && !is_empty(piece_at(board, captured_square));
+}
+
+bool is_quiet_move(const Board& board, Move move) {
+    return move.type != MoveType::Promotion
+        && move.type != MoveType::EnPassant
+        && !is_capture(board, move);
+}
+
+bool is_killer_move(const KillerMoves& killer_moves, int ply, Move move) {
+    if (ply < 0 || ply >= MaxPly) {
+        return false;
+    }
+
+    return same_move(killer_moves[ply][0], move) || same_move(killer_moves[ply][1], move);
+}
+
+void store_killer_move(KillerMoves& killer_moves, int ply, Move move) {
+    if (ply < 0 || ply >= MaxPly || same_move(killer_moves[ply][0], move)) {
+        return;
+    }
+
+    killer_moves[ply][1] = killer_moves[ply][0];
+    killer_moves[ply][0] = move;
+}
+
+int ordered_move_score(const Board& board, Move move, Move tt_move, bool has_tt_move, const KillerMoves& killer_moves, int ply) {
+    if (has_tt_move && same_move(move, tt_move)) {
+        return 1000000;
+    }
+
+    int score = move_order_score(board, move);
+
+    if (is_quiet_move(board, move) && is_killer_move(killer_moves, ply, move)) {
+        score += KillerMoveScore;
+    }
+
+    return score;
+}
+
+void order_moves(
+    const Board& board,
+    std::vector<Move>& moves,
+    Move tt_move,
+    bool has_tt_move,
+    const KillerMoves& killer_moves,
+    int ply
+) {
+    std::sort(moves.begin(), moves.end(), [&board, tt_move, has_tt_move, &killer_moves, ply](Move left, Move right) {
+        return ordered_move_score(board, left, tt_move, has_tt_move, killer_moves, ply)
+            > ordered_move_score(board, right, tt_move, has_tt_move, killer_moves, ply);
+    });
 }
 
 void order_moves(const Board& board, std::vector<Move>& moves, Move tt_move, bool has_tt_move) {
@@ -180,7 +258,7 @@ int negamax(Board& board, int depth, int ply, int alpha, int beta, SearchContext
 
     int best_score = std::numeric_limits<int>::min();
     Move best_move = no_move();
-    order_moves(board, moves, tt_move, has_tt_move);
+    order_moves(board, moves, tt_move, has_tt_move, context.killer_moves, ply);
 
     for (Move move : moves) {
         UndoState undo{};
@@ -206,6 +284,10 @@ int negamax(Board& board, int depth, int ply, int alpha, int beta, SearchContext
         }
 
         if (alpha >= beta) {
+            if (is_quiet_move(board, move)) {
+                store_killer_move(context.killer_moves, ply, move);
+            }
+
             break;
         }
     }
@@ -297,7 +379,7 @@ SearchResult find_best_move(Board& board, int depth) {
 }
 
 SearchResult find_best_move(Board& board, int depth, const std::vector<std::string>& recent_positions) {
-    SearchContext context{SearchStats{0, 0}, TranspositionTable{}, std::function<bool()>{}, false};
+    SearchContext context = make_search_context();
     return find_best_move_with_context(board, depth, recent_positions, context);
 }
 
@@ -317,7 +399,7 @@ SearchResult find_best_move_iterative(
     const std::function<void(int, const SearchResult&)>& on_depth_finished,
     const std::function<bool()>& should_stop
 ) {
-    SearchContext context{SearchStats{0, 0}, TranspositionTable{}, should_stop, false};
+    SearchContext context = make_search_context(should_stop);
     SearchResult result{no_move(), {}, evaluate_for_side_to_move(board), context.stats};
     bool completed_depth = false;
 
