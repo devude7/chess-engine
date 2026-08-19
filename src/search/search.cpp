@@ -126,7 +126,7 @@ std::vector<Move> principal_variation_from_table(const Board& board, const Trans
     return line;
 }
 
-int negamax(Board& board, int depth, int alpha, int beta, SearchContext& context) {
+int negamax(Board& board, int depth, int ply, int alpha, int beta, SearchContext& context) {
     ++context.stats.nodes;
 
     if (context.should_stop && context.should_stop()) {
@@ -172,7 +172,7 @@ int negamax(Board& board, int depth, int alpha, int beta, SearchContext& context
 
     if (moves.empty()) {
         if (is_in_check(board, board.side_to_move)) {
-            return -MateScore - depth;
+            return -MateScore + ply;
         }
 
         return 0;
@@ -189,7 +189,7 @@ int negamax(Board& board, int depth, int alpha, int beta, SearchContext& context
             continue;
         }
 
-        int score = -negamax(board, depth - 1, -beta, -alpha, context);
+        int score = -negamax(board, depth - 1, ply + 1, -beta, -alpha, context);
         undo_move(board, move, undo);
 
         if (context.stopped) {
@@ -254,7 +254,7 @@ SearchResult find_best_move_with_context(
             continue;
         }
 
-        int score = -negamax(board, depth - 1, -beta, -alpha, context);
+        int score = -negamax(board, depth - 1, 1, -beta, -alpha, context);
 
         if (contains_position(recent_positions, position_key(board))) {
             score -= RepetitionPenalty;
