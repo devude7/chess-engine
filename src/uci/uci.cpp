@@ -19,13 +19,19 @@ namespace chess {
 namespace {
 
 constexpr const char* StartPositionFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-constexpr int DefaultSearchDepth = 6;
+constexpr int DefaultSearchDepth = 10;
 constexpr int MaxSearchDepth = 64;
+constexpr int MinimumClockMoveTimeMs = 50;
 
 struct GoOptions {
     int depth;
     int movetime_ms;
     bool has_movetime;
+    int white_time_ms;
+    int black_time_ms;
+    int white_increment_ms;
+    int black_increment_ms;
+    bool has_clock_time;
 };
 
 struct PositionState {
@@ -161,7 +167,7 @@ PositionState position_state_from_command(const std::string& line, const Positio
 
 GoOptions options_from_go_command(const std::string& line) {
     std::vector<std::string> words = split_words(line);
-    GoOptions options{DefaultSearchDepth, 0, false};
+    GoOptions options{DefaultSearchDepth, 0, false, 0, 0, 0, 0, false};
 
     for (int index = 0; index + 1 < static_cast<int>(words.size()); ++index) {
         if (words[index] == "depth") {
@@ -178,10 +184,74 @@ GoOptions options_from_go_command(const std::string& line) {
                 options.has_movetime = true;
                 options.depth = MaxSearchDepth;
             }
+        } else if (words[index] == "wtime") {
+            int parsed_time = 0;
+
+            if (parse_int(words[index + 1], parsed_time) && parsed_time > 0) {
+                options.white_time_ms = parsed_time;
+                options.has_clock_time = true;
+            }
+        } else if (words[index] == "btime") {
+            int parsed_time = 0;
+
+            if (parse_int(words[index + 1], parsed_time) && parsed_time > 0) {
+                options.black_time_ms = parsed_time;
+                options.has_clock_time = true;
+            }
+        } else if (words[index] == "winc") {
+            int parsed_increment = 0;
+
+            if (parse_int(words[index + 1], parsed_increment) && parsed_increment > 0) {
+                options.white_increment_ms = parsed_increment;
+            }
+        } else if (words[index] == "binc") {
+            int parsed_increment = 0;
+
+            if (parse_int(words[index + 1], parsed_increment) && parsed_increment > 0) {
+                options.black_increment_ms = parsed_increment;
+            }
         }
     }
 
     return options;
+}
+
+int move_time_from_clock(const GoOptions& options, Color side_to_move) {
+    int remaining_time = side_to_move == Color::White ? options.white_time_ms : options.black_time_ms;
+    int increment = side_to_move == Color::White ? options.white_increment_ms : options.black_increment_ms;
+
+    if (remaining_time <= 0) {
+        return 0;
+    }
+
+    int move_time = remaining_time / 30 + increment / 2;
+    int maximum_move_time = remaining_time / 3;
+
+    if (move_time < MinimumClockMoveTimeMs && remaining_time > MinimumClockMoveTimeMs) {
+        move_time = MinimumClockMoveTimeMs;
+    }
+
+    if (move_time > maximum_move_time) {
+        move_time = maximum_move_time;
+    }
+
+    return move_time;
+}
+
+GoOptions apply_clock_time(const GoOptions& options, Color side_to_move) {
+    if (options.has_movetime || !options.has_clock_time) {
+        return options;
+    }
+
+    GoOptions updated_options = options;
+    updated_options.movetime_ms = move_time_from_clock(options, side_to_move);
+
+    if (updated_options.movetime_ms > 0) {
+        updated_options.has_movetime = true;
+        updated_options.depth = MaxSearchDepth;
+    }
+
+    return updated_options;
 }
 
 }
@@ -208,7 +278,7 @@ void run_uci_loop(std::istream& input, std::ostream& output) {
         } else if (line.rfind("position", 0) == 0) {
             state = position_state_from_command(line, state);
         } else if (line.rfind("go", 0) == 0) {
-            GoOptions go_options = options_from_go_command(line);
+            GoOptions go_options = apply_clock_time(options_from_go_command(line), state.board.side_to_move);
             std::optional<std::string> book_move_text = opening_book_move(state.move_history);
 
             if (book_move_text.has_value()) {
