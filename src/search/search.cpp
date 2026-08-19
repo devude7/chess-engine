@@ -24,6 +24,7 @@ constexpr int MateScore = 100000;
 constexpr int RepetitionPenalty = 200;
 constexpr int MaxPly = 128;
 constexpr int KillerMoveScore = 9000;
+constexpr int HistoryScoreLimit = 1000000;
 
 enum class BoundType {
     Exact,
@@ -41,11 +42,13 @@ struct TranspositionEntry {
 
 using TranspositionTable = std::unordered_map<std::uint64_t, TranspositionEntry>;
 using KillerMoves = std::array<std::array<Move, 2>, MaxPly>;
+using HistoryTable = std::array<std::array<int, 64>, 64>;
 
 struct SearchContext {
     SearchStats stats;
     TranspositionTable table;
     KillerMoves killer_moves;
+    HistoryTable history;
     std::function<bool()> should_stop;
     bool stopped;
 };
@@ -72,8 +75,25 @@ KillerMoves empty_killer_moves() {
     return killer_moves;
 }
 
+HistoryTable empty_history_table() {
+    HistoryTable history{};
+
+    for (auto& row : history) {
+        row.fill(0);
+    }
+
+    return history;
+}
+
 SearchContext make_search_context(const std::function<bool()>& should_stop = std::function<bool()>{}) {
-    return SearchContext{SearchStats{0, 0}, TranspositionTable{}, empty_killer_moves(), should_stop, false};
+    return SearchContext{
+        SearchStats{0, 0},
+        TranspositionTable{},
+        empty_killer_moves(),
+        empty_history_table(),
+        should_stop,
+        false
+    };
 }
 
 int evaluate_for_side_to_move(const Board& board) {
@@ -120,7 +140,35 @@ void store_killer_move(KillerMoves& killer_moves, int ply, Move move) {
     killer_moves[ply][0] = move;
 }
 
-int ordered_move_score(const Board& board, Move move, Move tt_move, bool has_tt_move, const KillerMoves& killer_moves, int ply) {
+void add_history_score(HistoryTable& history, Move move, int depth) {
+    if (!is_valid_square(move.from) || !is_valid_square(move.to)) {
+        return;
+    }
+
+    history[move.from][move.to] += depth * depth;
+
+    if (history[move.from][move.to] > HistoryScoreLimit) {
+        history[move.from][move.to] = HistoryScoreLimit;
+    }
+}
+
+int history_score(const HistoryTable& history, Move move) {
+    if (!is_valid_square(move.from) || !is_valid_square(move.to)) {
+        return 0;
+    }
+
+    return history[move.from][move.to];
+}
+
+int ordered_move_score(
+    const Board& board,
+    Move move,
+    Move tt_move,
+    bool has_tt_move,
+    const KillerMoves& killer_moves,
+    const HistoryTable& history,
+    int ply
+) {
     if (has_tt_move && same_move(move, tt_move)) {
         return 1000000;
     }
@@ -129,6 +177,10 @@ int ordered_move_score(const Board& board, Move move, Move tt_move, bool has_tt_
 
     if (is_quiet_move(board, move) && is_killer_move(killer_moves, ply, move)) {
         score += KillerMoveScore;
+    }
+
+    if (is_quiet_move(board, move)) {
+        score += history_score(history, move);
     }
 
     return score;
@@ -140,11 +192,12 @@ void order_moves(
     Move tt_move,
     bool has_tt_move,
     const KillerMoves& killer_moves,
+    const HistoryTable& history,
     int ply
 ) {
-    std::sort(moves.begin(), moves.end(), [&board, tt_move, has_tt_move, &killer_moves, ply](Move left, Move right) {
-        return ordered_move_score(board, left, tt_move, has_tt_move, killer_moves, ply)
-            > ordered_move_score(board, right, tt_move, has_tt_move, killer_moves, ply);
+    std::sort(moves.begin(), moves.end(), [&board, tt_move, has_tt_move, &killer_moves, &history, ply](Move left, Move right) {
+        return ordered_move_score(board, left, tt_move, has_tt_move, killer_moves, history, ply)
+            > ordered_move_score(board, right, tt_move, has_tt_move, killer_moves, history, ply);
     });
 }
 
@@ -258,7 +311,7 @@ int negamax(Board& board, int depth, int ply, int alpha, int beta, SearchContext
 
     int best_score = std::numeric_limits<int>::min();
     Move best_move = no_move();
-    order_moves(board, moves, tt_move, has_tt_move, context.killer_moves, ply);
+    order_moves(board, moves, tt_move, has_tt_move, context.killer_moves, context.history, ply);
 
     for (Move move : moves) {
         UndoState undo{};
@@ -286,6 +339,7 @@ int negamax(Board& board, int depth, int ply, int alpha, int beta, SearchContext
         if (alpha >= beta) {
             if (is_quiet_move(board, move)) {
                 store_killer_move(context.killer_moves, ply, move);
+                add_history_score(context.history, move, depth);
             }
 
             break;
