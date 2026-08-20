@@ -60,6 +60,27 @@ void test_winning_endgame_prefers_losing_king_on_edge() {
     assert(chess::evaluate(king_on_edge) > chess::evaluate(king_in_center));
 }
 
+void test_passed_pawn_improves_evaluation() {
+    chess::Board blocked_pawn = chess::board_from_fen("8/8/4p3/4P3/8/8/8/4K2k w - - 0 1");
+    chess::Board passed_pawn = chess::board_from_fen("8/8/8/4P3/8/8/8/4K2k w - - 0 1");
+
+    assert(chess::evaluate(passed_pawn) > chess::evaluate(blocked_pawn));
+}
+
+void test_doubled_pawns_reduce_evaluation() {
+    chess::Board connected_pawns = chess::board_from_fen("8/8/8/8/8/8/3PP3/4K2k w - - 0 1");
+    chess::Board doubled_pawns = chess::board_from_fen("8/8/8/8/8/4P3/4P3/4K2k w - - 0 1");
+
+    assert(chess::evaluate(connected_pawns) > chess::evaluate(doubled_pawns));
+}
+
+void test_isolated_pawn_reduces_evaluation() {
+    chess::Board supported_pawn = chess::board_from_fen("8/8/8/8/8/8/3PP3/4K2k w - - 0 1");
+    chess::Board isolated_pawn = chess::board_from_fen("8/8/8/8/8/8/4P3/4K2k w - - 0 1");
+
+    assert(chess::evaluate(supported_pawn) > chess::evaluate(isolated_pawn));
+}
+
 }
 
 int main() {
@@ -71,6 +92,9 @@ int main() {
     test_black_piece_square_table_is_mirrored();
     test_developed_knight_improves_evaluation();
     test_winning_endgame_prefers_losing_king_on_edge();
+    test_passed_pawn_improves_evaluation();
+    test_doubled_pawns_reduce_evaluation();
+    test_isolated_pawn_reduces_evaluation();
 
     return 0;
 }

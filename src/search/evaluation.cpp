@@ -6,6 +6,11 @@ namespace chess {
 
 namespace {
 
+constexpr int PassedPawnBonus = 35;
+constexpr int DoubledPawnPenalty = 20;
+constexpr int IsolatedPawnPenalty = 15;
+constexpr int PawnAdvanceBonus = 5;
+
 constexpr int PawnTable[64] = {
       0,   0,   0,   0,   0,   0,   0,   0,
      10,  10,  10, -10, -10,  10,  10,  10,
@@ -164,6 +169,102 @@ int edge_distance(int square) {
     return file_edge_distance < rank_edge_distance ? file_edge_distance : rank_edge_distance;
 }
 
+bool has_pawn_on_file(const Board& board, Color color, int file) {
+    if (file < 0 || file >= 8) {
+        return false;
+    }
+
+    for (int rank = 0; rank < 8; ++rank) {
+        Piece piece = board.squares[rank * 8 + file];
+
+        if (piece.type == PieceType::Pawn && piece.color == color) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+int pawn_count_on_file(const Board& board, Color color, int file) {
+    int count = 0;
+
+    if (file < 0 || file >= 8) {
+        return count;
+    }
+
+    for (int rank = 0; rank < 8; ++rank) {
+        Piece piece = board.squares[rank * 8 + file];
+
+        if (piece.type == PieceType::Pawn && piece.color == color) {
+            ++count;
+        }
+    }
+
+    return count;
+}
+
+bool is_passed_pawn(const Board& board, int square, Color color) {
+    int file = file_of(square);
+    int rank = rank_of(square);
+    Color enemy_color = opposite(color);
+    int rank_step = color == Color::White ? 1 : -1;
+
+    for (int checked_file = file - 1; checked_file <= file + 1; ++checked_file) {
+        if (checked_file < 0 || checked_file >= 8) {
+            continue;
+        }
+
+        for (int checked_rank = rank + rank_step; checked_rank >= 0 && checked_rank < 8; checked_rank += rank_step) {
+            Piece piece = board.squares[checked_rank * 8 + checked_file];
+
+            if (piece.type == PieceType::Pawn && piece.color == enemy_color) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+int pawn_advance_for_color(int square, Color color) {
+    int rank = rank_of(square);
+
+    return color == Color::White ? rank : 7 - rank;
+}
+
+int pawn_structure_score_for_pawn(const Board& board, int square, Color color) {
+    int file = file_of(square);
+    int score = pawn_advance_for_color(square, color) * PawnAdvanceBonus;
+
+    if (is_passed_pawn(board, square, color)) {
+        score += PassedPawnBonus + pawn_advance_for_color(square, color) * PawnAdvanceBonus;
+    }
+
+    if (pawn_count_on_file(board, color, file) > 1) {
+        score -= DoubledPawnPenalty;
+    }
+
+    if (!has_pawn_on_file(board, color, file - 1) && !has_pawn_on_file(board, color, file + 1)) {
+        score -= IsolatedPawnPenalty;
+    }
+
+    return color == Color::White ? score : -score;
+}
+
+int pawn_structure_score(const Board& board) {
+    int score = 0;
+
+    for (int square = 0; square < 64; ++square) {
+        Piece piece = board.squares[square];
+
+        if (piece.type == PieceType::Pawn) {
+            score += pawn_structure_score_for_pawn(board, square, piece.color);
+        }
+    }
+
+    return score;
+}
+
 int endgame_mop_up_bonus(const Board& board) {
     int material = material_balance(board);
 
@@ -238,7 +339,7 @@ int evaluate(const Board& board) {
         }
     }
 
-    return score + endgame_mop_up_bonus(board);
+    return score + pawn_structure_score(board) + endgame_mop_up_bonus(board);
 }
 
 }
