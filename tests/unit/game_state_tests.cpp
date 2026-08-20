@@ -29,12 +29,32 @@ void test_normal_position_is_not_finished() {
     assert(chess::game_result(board) == chess::GameResult::Ongoing);
 }
 
+void test_fifty_move_rule_draw_is_detected() {
+    chess::Board board = chess::board_from_fen("8/8/8/8/8/8/8/4K2k w - - 100 51");
+
+    assert(chess::is_fifty_move_rule_draw(board));
+    assert(chess::is_draw_by_rules(board));
+    assert(chess::game_result(board) == chess::GameResult::Draw);
+}
+
+void test_insufficient_material_draw_is_detected() {
+    chess::Board king_vs_king = chess::board_from_fen("8/8/8/8/8/8/8/4K2k w - - 0 1");
+    chess::Board king_and_bishop_vs_king = chess::board_from_fen("8/8/8/8/8/8/8/3BK2k w - - 0 1");
+    chess::Board king_and_rook_vs_king = chess::board_from_fen("8/8/8/8/8/8/8/3RK2k w - - 0 1");
+
+    assert(chess::has_insufficient_material(king_vs_king));
+    assert(chess::has_insufficient_material(king_and_bishop_vs_king));
+    assert(!chess::has_insufficient_material(king_and_rook_vs_king));
+}
+
 }
 
 int main() {
     test_checkmate_is_detected();
     test_stalemate_is_detected();
     test_normal_position_is_not_finished();
+    test_fifty_move_rule_draw_is_detected();
+    test_insufficient_material_draw_is_detected();
 
     return 0;
 }

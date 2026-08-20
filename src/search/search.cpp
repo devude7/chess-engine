@@ -11,6 +11,7 @@
 #include "chess/board/position_key.hpp"
 #include "chess/board/zobrist.hpp"
 #include "chess/core/square.hpp"
+#include "chess/game/game_state.hpp"
 #include "chess/movegen/attack.hpp"
 #include "chess/movegen/move_generator.hpp"
 #include "chess/search/evaluation.hpp"
@@ -49,6 +50,7 @@ struct SearchContext {
     TranspositionTable table;
     KillerMoves killer_moves;
     HistoryTable history;
+    std::vector<std::string> position_history;
     std::function<bool()> should_stop;
     bool stopped;
 };
@@ -85,12 +87,16 @@ HistoryTable empty_history_table() {
     return history;
 }
 
-SearchContext make_search_context(const std::function<bool()>& should_stop = std::function<bool()>{}) {
+SearchContext make_search_context(
+    const std::vector<std::string>& position_history = std::vector<std::string>{},
+    const std::function<bool()>& should_stop = std::function<bool()>{}
+) {
     return SearchContext{
         SearchStats{0, 0},
         TranspositionTable{},
         empty_killer_moves(),
         empty_history_table(),
+        position_history,
         should_stop,
         false
     };
@@ -224,6 +230,20 @@ bool contains_position(const std::vector<std::string>& positions, const std::str
     return std::find(positions.begin(), positions.end(), key) != positions.end();
 }
 
+int count_position(const std::vector<std::string>& positions, const std::string& key) {
+    return static_cast<int>(std::count(positions.begin(), positions.end(), key));
+}
+
+bool is_repetition_draw(const SearchContext& context, const Board& board) {
+    return count_position(context.position_history, position_key(board)) >= 3;
+}
+
+bool is_search_draw(const SearchContext& context, const Board& board) {
+    return is_fifty_move_rule_draw(board)
+        || has_insufficient_material(board)
+        || is_repetition_draw(context, board);
+}
+
 Move tt_best_move(const TranspositionTable& table, std::uint64_t key) {
     auto found = table.find(key);
 
@@ -267,6 +287,10 @@ int negamax(Board& board, int depth, int ply, int alpha, int beta, SearchContext
 
     if (depth == 0) {
         return quiescence(board, alpha, beta, context.stats);
+    }
+
+    if (is_search_draw(context, board)) {
+        return 0;
     }
 
     int original_alpha = alpha;
@@ -320,7 +344,9 @@ int negamax(Board& board, int depth, int ply, int alpha, int beta, SearchContext
             continue;
         }
 
+        context.position_history.push_back(position_key(board));
         int score = -negamax(board, depth - 1, ply + 1, -beta, -alpha, context);
+        context.position_history.pop_back();
         undo_move(board, move, undo);
 
         if (context.stopped) {
@@ -373,6 +399,10 @@ SearchResult find_best_move_with_context(
         return SearchResult{no_move(), {}, evaluate_for_side_to_move(board), context.stats};
     }
 
+    if (is_search_draw(context, board)) {
+        return SearchResult{moves.front(), {}, 0, context.stats};
+    }
+
     std::uint64_t key = zobrist_hash(board);
     Move root_tt_move = tt_best_move(context.table, key);
     bool has_root_tt_move = root_tt_move.from != NoSquare;
@@ -390,7 +420,9 @@ SearchResult find_best_move_with_context(
             continue;
         }
 
+        context.position_history.push_back(position_key(board));
         int score = -negamax(board, depth - 1, 1, -beta, -alpha, context);
+        context.position_history.pop_back();
 
         if (contains_position(recent_positions, position_key(board))) {
             score -= RepetitionPenalty;
@@ -433,7 +465,7 @@ SearchResult find_best_move(Board& board, int depth) {
 }
 
 SearchResult find_best_move(Board& board, int depth, const std::vector<std::string>& recent_positions) {
-    SearchContext context = make_search_context();
+    SearchContext context = make_search_context(recent_positions);
     return find_best_move_with_context(board, depth, recent_positions, context);
 }
 
@@ -453,7 +485,7 @@ SearchResult find_best_move_iterative(
     const std::function<void(int, const SearchResult&)>& on_depth_finished,
     const std::function<bool()>& should_stop
 ) {
-    SearchContext context = make_search_context(should_stop);
+    SearchContext context = make_search_context(recent_positions, should_stop);
     SearchResult result{no_move(), {}, evaluate_for_side_to_move(board), context.stats};
     bool completed_depth = false;
 

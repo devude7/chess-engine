@@ -115,6 +115,27 @@ void test_search_prefers_immediate_checkmate() {
     assert(result.score > 99000);
 }
 
+void test_search_scores_fifty_move_rule_as_draw() {
+    chess::Board board = chess::board_from_fen("8/8/8/8/8/8/8/R3K2k w Q - 100 51");
+
+    chess::SearchResult result = chess::find_best_move(board, 2);
+
+    assert(result.score == 0);
+}
+
+void test_search_scores_repetition_as_draw() {
+    chess::Board board = chess::board_from_fen("8/8/8/8/8/8/8/R3K2k w Q - 0 1");
+    std::vector<std::string> history{
+        chess::position_key(board),
+        chess::position_key(board),
+        chess::position_key(board)
+    };
+
+    chess::SearchResult result = chess::find_best_move(board, 2, history);
+
+    assert(result.score == 0);
+}
+
 void test_iterative_search_reports_each_completed_depth() {
     chess::Board board = chess::board_from_fen("8/8/8/8/8/8/8/R3K2k w Q - 0 1");
     std::vector<int> completed_depths;
@@ -149,6 +170,8 @@ int main() {
     test_repetition_penalty_can_change_root_choice();
     test_transposition_table_is_used_during_deeper_search();
     test_search_prefers_immediate_checkmate();
+    test_search_scores_fifty_move_rule_as_draw();
+    test_search_scores_repetition_as_draw();
     test_iterative_search_reports_each_completed_depth();
 
     return 0;
