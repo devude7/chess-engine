@@ -81,6 +81,27 @@ void test_isolated_pawn_reduces_evaluation() {
     assert(chess::evaluate(supported_pawn) > chess::evaluate(isolated_pawn));
 }
 
+void test_bishop_pair_improves_evaluation() {
+    chess::Board one_bishop = chess::board_from_fen("4k3/8/8/8/8/8/8/2B1K3 w - - 0 1");
+    chess::Board bishop_pair = chess::board_from_fen("4k3/8/8/8/8/8/8/2BBK3 w - - 0 1");
+
+    assert(chess::evaluate(bishop_pair) - chess::evaluate(one_bishop) > chess::piece_value(chess::PieceType::Bishop));
+}
+
+void test_rook_open_file_improves_evaluation() {
+    chess::Board blocked_rook = chess::board_from_fen("4k3/8/8/8/8/8/4P3/4R2K w - - 0 1");
+    chess::Board open_file_rook = chess::board_from_fen("4k3/8/8/8/8/8/8/4R2K w - - 0 1");
+
+    assert(chess::evaluate(open_file_rook) > chess::evaluate(blocked_rook) - chess::piece_value(chess::PieceType::Pawn));
+}
+
+void test_king_pawn_shield_improves_evaluation() {
+    chess::Board exposed_king = chess::board_from_fen("rnbq1rk1/pppppppp/8/8/8/5PPP/PPPPP3/RNBQ1RK1 w - - 0 1");
+    chess::Board shielded_king = chess::board_from_fen("rnbq1rk1/pppppppp/8/8/8/8/PPPPPPPP/RNBQ1RK1 w - - 0 1");
+
+    assert(chess::evaluate(shielded_king) > chess::evaluate(exposed_king));
+}
+
 }
 
 int main() {
@@ -95,6 +116,9 @@ int main() {
     test_passed_pawn_improves_evaluation();
     test_doubled_pawns_reduce_evaluation();
     test_isolated_pawn_reduces_evaluation();
+    test_bishop_pair_improves_evaluation();
+    test_rook_open_file_improves_evaluation();
+    test_king_pawn_shield_improves_evaluation();
 
     return 0;
 }

@@ -10,6 +10,13 @@ constexpr int PassedPawnBonus = 35;
 constexpr int DoubledPawnPenalty = 20;
 constexpr int IsolatedPawnPenalty = 15;
 constexpr int PawnAdvanceBonus = 5;
+constexpr int BishopPairBonus = 30;
+constexpr int RookSemiOpenFileBonus = 15;
+constexpr int RookOpenFileBonus = 30;
+constexpr int KingSafetyMaterialThreshold = 2400;
+constexpr int KingPawnShieldBonus = 20;
+constexpr int KingOpenFilePenalty = 15;
+constexpr int KingCenterPenalty = 10;
 
 constexpr int PawnTable[64] = {
       0,   0,   0,   0,   0,   0,   0,   0,
@@ -185,6 +192,22 @@ bool has_pawn_on_file(const Board& board, Color color, int file) {
     return false;
 }
 
+bool has_any_pawn_on_file(const Board& board, int file) {
+    if (file < 0 || file >= 8) {
+        return false;
+    }
+
+    for (int rank = 0; rank < 8; ++rank) {
+        Piece piece = board.squares[rank * 8 + file];
+
+        if (piece.type == PieceType::Pawn) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 int pawn_count_on_file(const Board& board, Color color, int file) {
     int count = 0;
 
@@ -265,6 +288,124 @@ int pawn_structure_score(const Board& board) {
     return score;
 }
 
+int bishop_pair_score(const Board& board) {
+    int white_bishops = 0;
+    int black_bishops = 0;
+
+    for (Piece piece : board.squares) {
+        if (piece.type != PieceType::Bishop) {
+            continue;
+        }
+
+        if (piece.color == Color::White) {
+            ++white_bishops;
+        } else {
+            ++black_bishops;
+        }
+    }
+
+    int score = 0;
+
+    if (white_bishops >= 2) {
+        score += BishopPairBonus;
+    }
+
+    if (black_bishops >= 2) {
+        score -= BishopPairBonus;
+    }
+
+    return score;
+}
+
+int rook_file_score(const Board& board) {
+    int score = 0;
+
+    for (int square = 0; square < 64; ++square) {
+        Piece piece = board.squares[square];
+
+        if (piece.type != PieceType::Rook) {
+            continue;
+        }
+
+        int file = file_of(square);
+        bool own_pawn_on_file = has_pawn_on_file(board, piece.color, file);
+
+        if (own_pawn_on_file) {
+            continue;
+        }
+
+        int bonus = has_any_pawn_on_file(board, file) ? RookSemiOpenFileBonus : RookOpenFileBonus;
+
+        if (piece.color == Color::White) {
+            score += bonus;
+        } else {
+            score -= bonus;
+        }
+    }
+
+    return score;
+}
+
+int king_pawn_shield_score(const Board& board, Color color, int king_square) {
+    int score = 0;
+    int king_file = file_of(king_square);
+    int king_rank = rank_of(king_square);
+    int shield_rank = color == Color::White ? king_rank + 1 : king_rank - 1;
+
+    if (shield_rank < 0 || shield_rank >= 8) {
+        return score;
+    }
+
+    for (int file = king_file - 1; file <= king_file + 1; ++file) {
+        if (file < 0 || file >= 8) {
+            continue;
+        }
+
+        Piece piece = board.squares[shield_rank * 8 + file];
+
+        if (piece.type == PieceType::Pawn && piece.color == color) {
+            score += KingPawnShieldBonus;
+        } else if (!has_pawn_on_file(board, color, file)) {
+            score -= KingOpenFilePenalty;
+        }
+    }
+
+    return score;
+}
+
+int king_center_exposure_penalty(int king_square) {
+    int file = file_of(king_square);
+    int rank = rank_of(king_square);
+
+    if (file >= 2 && file <= 5 && rank >= 2 && rank <= 5) {
+        return KingCenterPenalty;
+    }
+
+    return 0;
+}
+
+int king_safety_score_for_color(const Board& board, Color color) {
+    int king_square = king_square_for_color(board, color);
+
+    if (king_square == NoSquare) {
+        return 0;
+    }
+
+    int score = king_pawn_shield_score(board, color, king_square);
+    score -= king_center_exposure_penalty(king_square);
+
+    return color == Color::White ? score : -score;
+}
+
+int king_safety_score(const Board& board) {
+    if (non_king_material(board) <= KingSafetyMaterialThreshold) {
+        return 0;
+    }
+
+    return king_safety_score_for_color(board, Color::White)
+        + king_safety_score_for_color(board, Color::Black);
+}
+
 int endgame_mop_up_bonus(const Board& board) {
     int material = material_balance(board);
 
@@ -339,7 +480,12 @@ int evaluate(const Board& board) {
         }
     }
 
-    return score + pawn_structure_score(board) + endgame_mop_up_bonus(board);
+    return score
+        + pawn_structure_score(board)
+        + bishop_pair_score(board)
+        + rook_file_score(board)
+        + king_safety_score(board)
+        + endgame_mop_up_bonus(board);
 }
 
 }
