@@ -18,6 +18,4 @@ struct Move {
     PieceType promotion;
 };
 
-bool is_promotion(Move move);
-
 }

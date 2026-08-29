@@ -10,10 +10,8 @@ add_library(chess_engine_core
     src/core/color.cpp
     src/core/piece.cpp
     src/core/square.cpp
-    src/core/move.cpp
     src/board/board.cpp
     src/board/fen.cpp
-    src/board/position_key.cpp
     src/board/zobrist.cpp
     src/game/game_state.cpp
     src/movegen/attack.cpp
@@ -73,17 +71,6 @@ target_link_libraries(board_tests
 )
 
 add_test(NAME board_tests COMMAND board_tests)
-
-add_executable(position_key_tests
-    tests/unit/position_key_tests.cpp
-)
-
-target_link_libraries(position_key_tests
-    PRIVATE
-        chess_engine_core
-)
-
-add_test(NAME position_key_tests COMMAND position_key_tests)
 
 add_executable(zobrist_tests
     tests/unit/zobrist_tests.cpp
