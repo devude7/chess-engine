@@ -2,7 +2,6 @@
 
 #include <cstdint>
 #include <functional>
-#include <string>
 #include <vector>
 
 #include "chess/board/board.hpp"
@@ -23,17 +22,17 @@ struct SearchResult {
 };
 
 SearchResult find_best_move(Board& board, int depth);
-SearchResult find_best_move(Board& board, int depth, const std::vector<std::string>& recent_positions);
+SearchResult find_best_move(Board& board, int depth, const std::vector<std::uint64_t>& recent_positions);
 SearchResult find_best_move_iterative(
     Board& board,
     int max_depth,
-    const std::vector<std::string>& recent_positions,
+    const std::vector<std::uint64_t>& recent_positions,
     const std::function<void(int, const SearchResult&)>& on_depth_finished
 );
 SearchResult find_best_move_iterative(
     Board& board,
     int max_depth,
-    const std::vector<std::string>& recent_positions,
+    const std::vector<std::uint64_t>& recent_positions,
     const std::function<void(int, const SearchResult&)>& on_depth_finished,
     const std::function<bool()>& should_stop
 );

@@ -4,11 +4,9 @@
 #include <array>
 #include <cstdint>
 #include <limits>
-#include <string>
 #include <unordered_map>
 #include <vector>
 
-#include "chess/board/position_key.hpp"
 #include "chess/board/zobrist.hpp"
 #include "chess/core/square.hpp"
 #include "chess/game/game_state.hpp"
@@ -54,7 +52,7 @@ struct SearchContext {
     TranspositionTable table;
     KillerMoves killer_moves;
     HistoryTable history;
-    std::vector<std::string> position_history;
+    std::vector<std::uint64_t> position_history;
     std::function<bool()> should_stop;
     bool stopped;
 };
@@ -99,7 +97,7 @@ HistoryTable empty_history_table() {
 }
 
 SearchContext make_search_context(
-    const std::vector<std::string>& position_history = std::vector<std::string>{},
+    const std::vector<std::uint64_t>& position_history = std::vector<std::uint64_t>{},
     const std::function<bool()>& should_stop = std::function<bool()>{}
 ) {
     return SearchContext{
@@ -237,16 +235,16 @@ void order_moves(const Board& board, std::vector<Move>& moves) {
     order_moves(board, moves, no_move(), false);
 }
 
-bool contains_position(const std::vector<std::string>& positions, const std::string& key) {
+bool contains_position(const std::vector<std::uint64_t>& positions, std::uint64_t key) {
     return std::find(positions.begin(), positions.end(), key) != positions.end();
 }
 
-int count_position(const std::vector<std::string>& positions, const std::string& key) {
+int count_position(const std::vector<std::uint64_t>& positions, std::uint64_t key) {
     return static_cast<int>(std::count(positions.begin(), positions.end(), key));
 }
 
 bool is_repetition_draw(const SearchContext& context, const Board& board) {
-    return count_position(context.position_history, position_key(board)) >= 3;
+    return count_position(context.position_history, zobrist_hash(board)) >= 3;
 }
 
 bool is_search_draw(const SearchContext& context, const Board& board) {
@@ -487,7 +485,8 @@ int negamax(Board& board, int depth, int ply, int alpha, int beta, SearchContext
             continue;
         }
 
-        context.position_history.push_back(position_key(board));
+        std::uint64_t child_key = zobrist_hash(board);
+        context.position_history.push_back(child_key);
         int score = -negamax(board, depth - 1, ply + 1, -beta, -alpha, context);
         context.position_history.pop_back();
         undo_move(board, move, undo);
@@ -531,7 +530,7 @@ int negamax(Board& board, int depth, int ply, int alpha, int beta, SearchContext
 SearchResult find_best_move_with_context(
     Board& board,
     int depth,
-    const std::vector<std::string>& recent_positions,
+    const std::vector<std::uint64_t>& recent_positions,
     SearchContext& context,
     int alpha,
     int beta
@@ -565,11 +564,12 @@ SearchResult find_best_move_with_context(
             continue;
         }
 
-        context.position_history.push_back(position_key(board));
+        std::uint64_t child_key = zobrist_hash(board);
+        context.position_history.push_back(child_key);
         int score = -negamax(board, depth - 1, 1, -beta, -alpha, context);
         context.position_history.pop_back();
 
-        if (contains_position(recent_positions, position_key(board))) {
+        if (contains_position(recent_positions, child_key)) {
             score -= RepetitionPenalty;
         }
 
@@ -618,10 +618,10 @@ SearchResult find_best_move_with_context(
 }
 
 SearchResult find_best_move(Board& board, int depth) {
-    return find_best_move(board, depth, std::vector<std::string>{});
+    return find_best_move(board, depth, std::vector<std::uint64_t>{});
 }
 
-SearchResult find_best_move(Board& board, int depth, const std::vector<std::string>& recent_positions) {
+SearchResult find_best_move(Board& board, int depth, const std::vector<std::uint64_t>& recent_positions) {
     SearchContext context = make_search_context(recent_positions);
     return find_best_move_with_context(board, depth, recent_positions, context, -Infinity, Infinity);
 }
@@ -629,7 +629,7 @@ SearchResult find_best_move(Board& board, int depth, const std::vector<std::stri
 SearchResult find_best_move_iterative(
     Board& board,
     int max_depth,
-    const std::vector<std::string>& recent_positions,
+    const std::vector<std::uint64_t>& recent_positions,
     const std::function<void(int, const SearchResult&)>& on_depth_finished
 ) {
     return find_best_move_iterative(board, max_depth, recent_positions, on_depth_finished, std::function<bool()>{});
@@ -638,7 +638,7 @@ SearchResult find_best_move_iterative(
 SearchResult find_best_move_iterative(
     Board& board,
     int max_depth,
-    const std::vector<std::string>& recent_positions,
+    const std::vector<std::uint64_t>& recent_positions,
     const std::function<void(int, const SearchResult&)>& on_depth_finished,
     const std::function<bool()>& should_stop
 ) {

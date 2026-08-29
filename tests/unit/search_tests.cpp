@@ -2,7 +2,7 @@
 #include <vector>
 
 #include "chess/board/fen.hpp"
-#include "chess/board/position_key.hpp"
+#include "chess/board/zobrist.hpp"
 #include "chess/core/square.hpp"
 #include "chess/search/evaluation.hpp"
 #include "chess/search/search.hpp"
@@ -96,7 +96,7 @@ void test_repetition_penalty_can_change_root_choice() {
     chess::UndoState undo{};
     chess::make_move(after_best_move, without_history.best_move, undo);
 
-    std::vector<std::string> recent_positions{chess::position_key(after_best_move)};
+    std::vector<std::uint64_t> recent_positions{chess::zobrist_hash(after_best_move)};
     chess::SearchResult with_history = chess::find_best_move(board, 1, recent_positions);
 
     bool changed_move = with_history.best_move.from != without_history.best_move.from
@@ -136,10 +136,10 @@ void test_search_scores_fifty_move_rule_as_draw() {
 
 void test_search_scores_repetition_as_draw() {
     chess::Board board = chess::board_from_fen("8/8/8/8/8/8/8/R3K2k w Q - 0 1");
-    std::vector<std::string> history{
-        chess::position_key(board),
-        chess::position_key(board),
-        chess::position_key(board)
+    std::vector<std::uint64_t> history{
+        chess::zobrist_hash(board),
+        chess::zobrist_hash(board),
+        chess::zobrist_hash(board)
     };
 
     chess::SearchResult result = chess::find_best_move(board, 2, history);
@@ -154,7 +154,7 @@ void test_iterative_search_reports_each_completed_depth() {
     chess::SearchResult result = chess::find_best_move_iterative(
         board,
         3,
-        std::vector<std::string>{},
+        std::vector<std::uint64_t>{},
         [&completed_depths](int depth, const chess::SearchResult&) {
             completed_depths.push_back(depth);
         }
@@ -176,7 +176,7 @@ void test_iterative_search_matches_full_window_search() {
     chess::SearchResult iterative_result = chess::find_best_move_iterative(
         iterative_board,
         3,
-        std::vector<std::string>{},
+        std::vector<std::uint64_t>{},
         [](int, const chess::SearchResult&) {}
     );
 
