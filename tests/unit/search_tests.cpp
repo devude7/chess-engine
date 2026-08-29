@@ -77,6 +77,17 @@ void test_quiescence_sees_immediate_capture() {
     assert(quiescence_score > 0);
 }
 
+void test_quiescence_searches_check_evasions() {
+    chess::Board board = chess::board_from_fen("4k3/8/8/8/8/8/4r3/4K3 w - - 0 1");
+    chess::SearchStats stats{0, 0};
+
+    int static_score = chess::evaluate(board);
+    int quiescence_score = chess::quiescence(board, -1000000, 1000000, stats);
+
+    assert(quiescence_score != static_score);
+    assert(stats.nodes > 1);
+}
+
 void test_repetition_penalty_can_change_root_choice() {
     chess::Board board = chess::board_from_fen("8/8/8/8/8/8/8/R3K2k w Q - 0 1");
     chess::SearchResult without_history = chess::find_best_move(board, 1);
@@ -184,6 +195,7 @@ int main() {
     test_promotion_scores_higher_than_quiet_move();
     test_quiescence_returns_static_evaluation_in_quiet_position();
     test_quiescence_sees_immediate_capture();
+    test_quiescence_searches_check_evasions();
     test_repetition_penalty_can_change_root_choice();
     test_transposition_table_is_used_during_deeper_search();
     test_search_prefers_immediate_checkmate();

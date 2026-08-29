@@ -330,6 +330,75 @@ std::vector<Move> principal_variation_from_table(const Board& board, const Trans
     return line;
 }
 
+int quiescence_search(Board& board, int ply, int alpha, int beta, SearchStats& stats) {
+    ++stats.nodes;
+
+    if (is_in_check(board, board.side_to_move)) {
+        std::vector<Move> moves = generate_legal_moves(board);
+
+        if (moves.empty()) {
+            return -MateScore + ply;
+        }
+
+        order_moves(board, moves);
+
+        for (Move move : moves) {
+            UndoState undo{};
+
+            if (!make_move(board, move, undo)) {
+                continue;
+            }
+
+            int score = -quiescence_search(board, ply + 1, -beta, -alpha, stats);
+            undo_move(board, move, undo);
+
+            if (score >= beta) {
+                return beta;
+            }
+
+            if (score > alpha) {
+                alpha = score;
+            }
+        }
+
+        return alpha;
+    }
+
+    int stand_pat = evaluate_for_side_to_move(board);
+
+    if (stand_pat >= beta) {
+        return beta;
+    }
+
+    if (stand_pat > alpha) {
+        alpha = stand_pat;
+    }
+
+    std::vector<Move> moves = generate_tactical_moves(board);
+    order_moves(board, moves);
+
+    for (Move move : moves) {
+        UndoState undo{};
+
+        if (!make_move(board, move, undo)) {
+            continue;
+        }
+
+        int score = -quiescence_search(board, ply + 1, -beta, -alpha, stats);
+        undo_move(board, move, undo);
+
+        if (score >= beta) {
+            return beta;
+        }
+
+        if (score > alpha) {
+            alpha = score;
+        }
+    }
+
+    return alpha;
+}
+
 int negamax(Board& board, int depth, int ply, int alpha, int beta, SearchContext& context) {
     ++context.stats.nodes;
 
@@ -339,7 +408,7 @@ int negamax(Board& board, int depth, int ply, int alpha, int beta, SearchContext
     }
 
     if (depth == 0) {
-        return quiescence(board, alpha, beta, context.stats);
+        return quiescence_search(board, ply, alpha, beta, context.stats);
     }
 
     if (is_search_draw(context, board)) {
@@ -672,41 +741,7 @@ int quiescence(Board& board, int alpha, int beta) {
 }
 
 int quiescence(Board& board, int alpha, int beta, SearchStats& stats) {
-    ++stats.nodes;
-
-    int stand_pat = evaluate_for_side_to_move(board);
-
-    if (stand_pat >= beta) {
-        return beta;
-    }
-
-    if (stand_pat > alpha) {
-        alpha = stand_pat;
-    }
-
-    std::vector<Move> moves = generate_tactical_moves(board);
-    order_moves(board, moves);
-
-    for (Move move : moves) {
-        UndoState undo{};
-
-        if (!make_move(board, move, undo)) {
-            continue;
-        }
-
-        int score = -quiescence(board, -beta, -alpha, stats);
-        undo_move(board, move, undo);
-
-        if (score >= beta) {
-            return beta;
-        }
-
-        if (score > alpha) {
-            alpha = score;
-        }
-    }
-
-    return alpha;
+    return quiescence_search(board, 0, alpha, beta, stats);
 }
 
 }
