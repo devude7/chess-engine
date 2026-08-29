@@ -6,27 +6,27 @@ namespace chess {
 
 namespace {
 
-void generate_pawn_moves(const Board& board, int from, std::vector<Move>& moves);
-void generate_knight_moves(const Board& board, int from, std::vector<Move>& moves);
-void generate_bishop_moves(const Board& board, int from, std::vector<Move>& moves);
-void generate_rook_moves(const Board& board, int from, std::vector<Move>& moves);
-void generate_queen_moves(const Board& board, int from, std::vector<Move>& moves);
-void generate_king_moves(const Board& board, int from, std::vector<Move>& moves);
-void generate_castling_moves(const Board& board, int from, std::vector<Move>& moves);
-void generate_sliding_moves(const Board& board, int from, const int directions[][2], int direction_count, std::vector<Move>& moves);
-void add_pawn_move(int from, int to, bool is_promotion, std::vector<Move>& moves);
-void generate_pawn_tactical_moves(const Board& board, int from, std::vector<Move>& moves);
-void generate_knight_tactical_moves(const Board& board, int from, std::vector<Move>& moves);
-void generate_bishop_tactical_moves(const Board& board, int from, std::vector<Move>& moves);
-void generate_rook_tactical_moves(const Board& board, int from, std::vector<Move>& moves);
-void generate_queen_tactical_moves(const Board& board, int from, std::vector<Move>& moves);
-void generate_king_tactical_moves(const Board& board, int from, std::vector<Move>& moves);
-void generate_sliding_tactical_moves(const Board& board, int from, const int directions[][2], int direction_count, std::vector<Move>& moves);
+void generate_pawn_moves(const Board& board, int from, MoveList& moves);
+void generate_knight_moves(const Board& board, int from, MoveList& moves);
+void generate_bishop_moves(const Board& board, int from, MoveList& moves);
+void generate_rook_moves(const Board& board, int from, MoveList& moves);
+void generate_queen_moves(const Board& board, int from, MoveList& moves);
+void generate_king_moves(const Board& board, int from, MoveList& moves);
+void generate_castling_moves(const Board& board, int from, MoveList& moves);
+void generate_sliding_moves(const Board& board, int from, const int directions[][2], int direction_count, MoveList& moves);
+void add_pawn_move(int from, int to, bool is_promotion, MoveList& moves);
+void generate_pawn_tactical_moves(const Board& board, int from, MoveList& moves);
+void generate_knight_tactical_moves(const Board& board, int from, MoveList& moves);
+void generate_bishop_tactical_moves(const Board& board, int from, MoveList& moves);
+void generate_rook_tactical_moves(const Board& board, int from, MoveList& moves);
+void generate_queen_tactical_moves(const Board& board, int from, MoveList& moves);
+void generate_king_tactical_moves(const Board& board, int from, MoveList& moves);
+void generate_sliding_tactical_moves(const Board& board, int from, const int directions[][2], int direction_count, MoveList& moves);
 
 } 
 
-std::vector<Move> generate_pseudo_legal_moves(const Board& board) {
-    std::vector<Move> moves;
+MoveList generate_pseudo_legal_moves(const Board& board) {
+    MoveList moves;
 
     for (int square = 0; square < 64; ++square) {
         Piece piece = piece_at(board, square);
@@ -53,8 +53,8 @@ std::vector<Move> generate_pseudo_legal_moves(const Board& board) {
     return moves;
 }
 
-std::vector<Move> generate_pseudo_tactical_moves(const Board& board) {
-    std::vector<Move> moves;
+MoveList generate_pseudo_tactical_moves(const Board& board) {
+    MoveList moves;
 
     for (int square = 0; square < 64; ++square) {
         Piece piece = piece_at(board, square);
@@ -81,9 +81,9 @@ std::vector<Move> generate_pseudo_tactical_moves(const Board& board) {
     return moves;
 }
 
-std::vector<Move> generate_legal_moves(const Board& board) {
-    std::vector<Move> legal_moves;
-    std::vector<Move> pseudo_moves = generate_pseudo_legal_moves(board);
+MoveList generate_legal_moves(const Board& board) {
+    MoveList legal_moves;
+    MoveList pseudo_moves = generate_pseudo_legal_moves(board);
 
     for (Move move : pseudo_moves) {
         Board copy = board;
@@ -104,9 +104,9 @@ std::vector<Move> generate_legal_moves(const Board& board) {
     return legal_moves;
 }
 
-std::vector<Move> generate_tactical_moves(const Board& board) {
-    std::vector<Move> tactical_moves;
-    std::vector<Move> pseudo_moves = generate_pseudo_tactical_moves(board);
+MoveList generate_tactical_moves(const Board& board) {
+    MoveList tactical_moves;
+    MoveList pseudo_moves = generate_pseudo_tactical_moves(board);
 
     for (Move move : pseudo_moves) {
         Board copy = board;
@@ -129,7 +129,7 @@ std::vector<Move> generate_tactical_moves(const Board& board) {
 
 namespace {
 
-void generate_pawn_moves(const Board& board, int from, std::vector<Move>& moves) {
+void generate_pawn_moves(const Board& board, int from, MoveList& moves) {
     Color color = board.side_to_move;
     int direction = color == Color::White ? 1 : -1;
     int start_rank = color == Color::White ? 1 : 6;
@@ -173,7 +173,7 @@ void generate_pawn_moves(const Board& board, int from, std::vector<Move>& moves)
     }
 }
 
-void generate_knight_moves(const Board& board, int from, std::vector<Move>& moves) {
+void generate_knight_moves(const Board& board, int from, MoveList& moves) {
     constexpr int knight_offsets[8][2] = {
         { 1,  2},
         { 2,  1},
@@ -206,7 +206,7 @@ void generate_knight_moves(const Board& board, int from, std::vector<Move>& move
     }
 }
 
-void generate_bishop_moves(const Board& board, int from, std::vector<Move>& moves) {
+void generate_bishop_moves(const Board& board, int from, MoveList& moves) {
     constexpr int directions[4][2] = {
         { 1,  1},
         { 1, -1},
@@ -216,7 +216,7 @@ void generate_bishop_moves(const Board& board, int from, std::vector<Move>& move
     generate_sliding_moves(board, from, directions, 4, moves);
 }
 
-void generate_rook_moves(const Board& board, int from, std::vector<Move>& moves) {
+void generate_rook_moves(const Board& board, int from, MoveList& moves) {
     constexpr int directions[4][2] = {
         { 1,  0},
         { 0, -1},
@@ -226,7 +226,7 @@ void generate_rook_moves(const Board& board, int from, std::vector<Move>& moves)
     generate_sliding_moves(board, from, directions, 4, moves);
 }
 
-void generate_queen_moves(const Board& board, int from, std::vector<Move>& moves) {
+void generate_queen_moves(const Board& board, int from, MoveList& moves) {
     constexpr int directions[8][2] = {
         { 1,  0},
         { 1,  1},
@@ -240,7 +240,7 @@ void generate_queen_moves(const Board& board, int from, std::vector<Move>& moves
     generate_sliding_moves(board, from, directions, 8, moves);
 }
 
-void generate_king_moves(const Board& board, int from, std::vector<Move>& moves) {
+void generate_king_moves(const Board& board, int from, MoveList& moves) {
     constexpr int king_offsets[8][2] = {
         { 1,  0},
         { 1,  1},
@@ -274,7 +274,7 @@ void generate_king_moves(const Board& board, int from, std::vector<Move>& moves)
     generate_castling_moves(board, from, moves);
 }
 
-void generate_castling_moves(const Board& board, int from, std::vector<Move>& moves) {
+void generate_castling_moves(const Board& board, int from, MoveList& moves) {
     Color color = board.side_to_move;
     Color enemy = opposite(color);
 
@@ -319,7 +319,7 @@ void generate_castling_moves(const Board& board, int from, std::vector<Move>& mo
     }
 }
 
-void generate_sliding_moves(const Board& board, int from, const int directions[][2], int direction_count, std::vector<Move>& moves) {
+void generate_sliding_moves(const Board& board, int from, const int directions[][2], int direction_count, MoveList& moves) {
     int from_file = file_of(from);
     int from_rank = rank_of(from);
 
@@ -348,7 +348,7 @@ void generate_sliding_moves(const Board& board, int from, const int directions[]
     }
 }
 
-void add_pawn_move(int from, int to, bool is_promotion, std::vector<Move>& moves) {
+void add_pawn_move(int from, int to, bool is_promotion, MoveList& moves) {
     if (!is_promotion) {
         moves.push_back(Move{from, to, MoveType::Normal, PieceType::None});
         return;
@@ -360,7 +360,7 @@ void add_pawn_move(int from, int to, bool is_promotion, std::vector<Move>& moves
     moves.push_back(Move{from, to, MoveType::Promotion, PieceType::Knight});
 }
 
-void generate_pawn_tactical_moves(const Board& board, int from, std::vector<Move>& moves) {
+void generate_pawn_tactical_moves(const Board& board, int from, MoveList& moves) {
     Color color = board.side_to_move;
     int direction = color == Color::White ? 1 : -1;
     int promotion_rank = color == Color::White ? 7 : 0;
@@ -394,7 +394,7 @@ void generate_pawn_tactical_moves(const Board& board, int from, std::vector<Move
     }
 }
 
-void generate_knight_tactical_moves(const Board& board, int from, std::vector<Move>& moves) {
+void generate_knight_tactical_moves(const Board& board, int from, MoveList& moves) {
     constexpr int knight_offsets[8][2] = {
         { 1,  2},
         { 2,  1},
@@ -425,7 +425,7 @@ void generate_knight_tactical_moves(const Board& board, int from, std::vector<Mo
     }
 }
 
-void generate_bishop_tactical_moves(const Board& board, int from, std::vector<Move>& moves) {
+void generate_bishop_tactical_moves(const Board& board, int from, MoveList& moves) {
     constexpr int directions[4][2] = {
         { 1,  1},
         { 1, -1},
@@ -435,7 +435,7 @@ void generate_bishop_tactical_moves(const Board& board, int from, std::vector<Mo
     generate_sliding_tactical_moves(board, from, directions, 4, moves);
 }
 
-void generate_rook_tactical_moves(const Board& board, int from, std::vector<Move>& moves) {
+void generate_rook_tactical_moves(const Board& board, int from, MoveList& moves) {
     constexpr int directions[4][2] = {
         { 1,  0},
         { 0, -1},
@@ -445,7 +445,7 @@ void generate_rook_tactical_moves(const Board& board, int from, std::vector<Move
     generate_sliding_tactical_moves(board, from, directions, 4, moves);
 }
 
-void generate_queen_tactical_moves(const Board& board, int from, std::vector<Move>& moves) {
+void generate_queen_tactical_moves(const Board& board, int from, MoveList& moves) {
     constexpr int directions[8][2] = {
         { 1,  0},
         { 1,  1},
@@ -459,7 +459,7 @@ void generate_queen_tactical_moves(const Board& board, int from, std::vector<Mov
     generate_sliding_tactical_moves(board, from, directions, 8, moves);
 }
 
-void generate_king_tactical_moves(const Board& board, int from, std::vector<Move>& moves) {
+void generate_king_tactical_moves(const Board& board, int from, MoveList& moves) {
     constexpr int king_offsets[8][2] = {
         { 1,  0},
         { 1,  1},
@@ -490,7 +490,7 @@ void generate_king_tactical_moves(const Board& board, int from, std::vector<Move
     }
 }
 
-void generate_sliding_tactical_moves(const Board& board, int from, const int directions[][2], int direction_count, std::vector<Move>& moves) {
+void generate_sliding_tactical_moves(const Board& board, int from, const int directions[][2], int direction_count, MoveList& moves) {
     int from_file = file_of(from);
     int from_rank = rank_of(from);
 

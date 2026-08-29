@@ -1,7 +1,5 @@
 #include "chess/uci/uci_move.hpp"
 
-#include <vector>
-
 #include "chess/core/square.hpp"
 #include "chess/movegen/move_generator.hpp"
 
@@ -69,7 +67,7 @@ Move move_from_uci(const Board& board, const std::string& text) {
         return no_move();
     }
 
-    std::vector<Move> legal_moves = generate_legal_moves(board);
+    MoveList legal_moves = generate_legal_moves(board);
 
     for (Move move : legal_moves) {
         if (move_to_uci(move) == text) {

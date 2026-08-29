@@ -204,7 +204,7 @@ int ordered_move_score(
 
 void order_moves(
     const Board& board,
-    std::vector<Move>& moves,
+    MoveList& moves,
     Move tt_move,
     bool has_tt_move,
     const KillerMoves& killer_moves,
@@ -217,7 +217,7 @@ void order_moves(
     });
 }
 
-void order_moves(const Board& board, std::vector<Move>& moves, Move tt_move, bool has_tt_move) {
+void order_moves(const Board& board, MoveList& moves, Move tt_move, bool has_tt_move) {
     std::sort(moves.begin(), moves.end(), [&board, tt_move, has_tt_move](Move left, Move right) {
         if (has_tt_move) {
             bool left_is_tt_move = same_move(left, tt_move);
@@ -232,7 +232,7 @@ void order_moves(const Board& board, std::vector<Move>& moves, Move tt_move, boo
     });
 }
 
-void order_moves(const Board& board, std::vector<Move>& moves) {
+void order_moves(const Board& board, MoveList& moves) {
     order_moves(board, moves, no_move(), false);
 }
 
@@ -340,7 +340,7 @@ int quiescence_search(Board& board, int ply, int alpha, int beta, SearchStats& s
     ++stats.nodes;
 
     if (is_in_check(board, board.side_to_move)) {
-        std::vector<Move> moves = generate_legal_moves(board);
+        MoveList moves = generate_legal_moves(board);
 
         if (moves.empty()) {
             return -MateScore + ply;
@@ -380,7 +380,7 @@ int quiescence_search(Board& board, int ply, int alpha, int beta, SearchStats& s
         alpha = stand_pat;
     }
 
-    std::vector<Move> moves = generate_tactical_moves(board);
+    MoveList moves = generate_tactical_moves(board);
     order_moves(board, moves);
 
     for (Move move : moves) {
@@ -472,7 +472,7 @@ int negamax(Board& board, int depth, int ply, int alpha, int beta, SearchContext
         }
     }
 
-    std::vector<Move> moves = generate_legal_moves(board);
+    MoveList moves = generate_legal_moves(board);
 
     if (moves.empty()) {
         if (is_in_check(board, board.side_to_move)) {
@@ -545,7 +545,7 @@ SearchResult find_best_move_with_context(
 ) {
     ++context.stats.nodes;
 
-    std::vector<Move> moves = generate_legal_moves(board);
+    MoveList moves = generate_legal_moves(board);
 
     if (moves.empty() || depth <= 0) {
         return SearchResult{no_move(), {}, evaluate_for_side_to_move(board), context.stats};

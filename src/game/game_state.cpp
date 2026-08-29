@@ -1,7 +1,5 @@
 #include "chess/game/game_state.hpp"
 
-#include <vector>
-
 #include "chess/core/square.hpp"
 #include "chess/core/move.hpp"
 #include "chess/movegen/attack.hpp"
@@ -10,13 +8,13 @@
 namespace chess {
 
 bool is_checkmate(const Board& board) {
-    std::vector<Move> legal_moves = generate_legal_moves(board);
+    MoveList legal_moves = generate_legal_moves(board);
 
     return is_in_check(board, board.side_to_move) && legal_moves.empty();
 }
 
 bool is_stalemate(const Board& board) {
-    std::vector<Move> legal_moves = generate_legal_moves(board);
+    MoveList legal_moves = generate_legal_moves(board);
 
     return !is_in_check(board, board.side_to_move) && legal_moves.empty();
 }

@@ -1,7 +1,5 @@
 #include "chess/movegen/perft.hpp"
 
-#include <vector>
-
 #include "chess/core/move.hpp"
 #include "chess/movegen/move_generator.hpp"
 
@@ -12,7 +10,7 @@ std::uint64_t perft(Board& board, int depth) {
         return 1;
     }
 
-    std::vector<Move> moves = generate_legal_moves(board);
+    MoveList moves = generate_legal_moves(board);
 
     if (depth == 1) {
         return moves.size();
