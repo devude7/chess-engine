@@ -157,6 +157,23 @@ void test_iterative_search_reports_each_completed_depth() {
     assert(completed_depths[2] == 3);
 }
 
+void test_iterative_search_matches_full_window_search() {
+    chess::Board direct_board = chess::board_from_fen("rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2");
+    chess::Board iterative_board = direct_board;
+
+    chess::SearchResult direct_result = chess::find_best_move(direct_board, 3);
+    chess::SearchResult iterative_result = chess::find_best_move_iterative(
+        iterative_board,
+        3,
+        std::vector<std::string>{},
+        [](int, const chess::SearchResult&) {}
+    );
+
+    assert(iterative_result.best_move.from == direct_result.best_move.from);
+    assert(iterative_result.best_move.to == direct_result.best_move.to);
+    assert(iterative_result.score == direct_result.score);
+}
+
 }
 
 int main() {
@@ -173,6 +190,7 @@ int main() {
     test_search_scores_fifty_move_rule_as_draw();
     test_search_scores_repetition_as_draw();
     test_iterative_search_reports_each_completed_depth();
+    test_iterative_search_matches_full_window_search();
 
     return 0;
 }

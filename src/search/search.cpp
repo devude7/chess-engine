@@ -26,6 +26,8 @@ constexpr int RepetitionPenalty = 200;
 constexpr int MaxPly = 128;
 constexpr int KillerMoveScore = 9000;
 constexpr int HistoryScoreLimit = 1000000;
+constexpr int InitialAspirationWindow = 50;
+constexpr int MaxAspirationWindow = Infinity;
 
 enum class BoundType {
     Exact,
@@ -389,7 +391,9 @@ SearchResult find_best_move_with_context(
     Board& board,
     int depth,
     const std::vector<std::string>& recent_positions,
-    SearchContext& context
+    SearchContext& context,
+    int alpha,
+    int beta
 ) {
     ++context.stats.nodes;
 
@@ -408,8 +412,8 @@ SearchResult find_best_move_with_context(
     bool has_root_tt_move = root_tt_move.from != NoSquare;
     Move best_move = moves.front();
     int best_score = std::numeric_limits<int>::min();
-    int alpha = -Infinity;
-    int beta = Infinity;
+    int original_alpha = alpha;
+    int original_beta = beta;
     order_moves(board, moves, root_tt_move, has_root_tt_move);
     bool searched_move = false;
 
@@ -444,6 +448,10 @@ SearchResult find_best_move_with_context(
         if (score > alpha) {
             alpha = score;
         }
+
+        if (alpha >= beta) {
+            break;
+        }
     }
 
     if (!searched_move) {
@@ -451,7 +459,15 @@ SearchResult find_best_move_with_context(
     }
 
     if (!context.stopped) {
-        context.table[key] = TranspositionEntry{depth, best_score, BoundType::Exact, best_move, best_move.from != NoSquare};
+        BoundType bound = BoundType::Exact;
+
+        if (best_score <= original_alpha) {
+            bound = BoundType::UpperBound;
+        } else if (best_score >= original_beta) {
+            bound = BoundType::LowerBound;
+        }
+
+        context.table[key] = TranspositionEntry{depth, best_score, bound, best_move, best_move.from != NoSquare};
     }
 
     std::vector<Move> principal_variation = principal_variation_from_table(board, context.table, depth);
@@ -466,7 +482,7 @@ SearchResult find_best_move(Board& board, int depth) {
 
 SearchResult find_best_move(Board& board, int depth, const std::vector<std::string>& recent_positions) {
     SearchContext context = make_search_context(recent_positions);
-    return find_best_move_with_context(board, depth, recent_positions, context);
+    return find_best_move_with_context(board, depth, recent_positions, context, -Infinity, Infinity);
 }
 
 SearchResult find_best_move_iterative(
@@ -488,20 +504,61 @@ SearchResult find_best_move_iterative(
     SearchContext context = make_search_context(recent_positions, should_stop);
     SearchResult result{no_move(), {}, evaluate_for_side_to_move(board), context.stats};
     bool completed_depth = false;
+    int previous_score = 0;
 
     for (int depth = 1; depth <= max_depth; ++depth) {
-        context.stopped = false;
-        SearchResult depth_result = find_best_move_with_context(board, depth, recent_positions, context);
+        int window = InitialAspirationWindow;
+        int alpha = completed_depth ? previous_score - window : -Infinity;
+        int beta = completed_depth ? previous_score + window : Infinity;
+        SearchResult depth_result{no_move(), {}, evaluate_for_side_to_move(board), context.stats};
 
-        if (context.stopped) {
-            if (!completed_depth) {
-                result = depth_result;
+        while (true) {
+            context.stopped = false;
+            depth_result = find_best_move_with_context(board, depth, recent_positions, context, alpha, beta);
+
+            if (context.stopped) {
+                if (!completed_depth) {
+                    result = depth_result;
+                }
+
+                break;
             }
 
+            if (!completed_depth || (depth_result.score > alpha && depth_result.score < beta)) {
+                break;
+            }
+
+            if (depth_result.score <= alpha) {
+                alpha = previous_score - window * 2;
+            } else {
+                beta = previous_score + window * 2;
+            }
+
+            if (alpha <= -Infinity && beta >= Infinity) {
+                break;
+            }
+
+            if (alpha < -Infinity) {
+                alpha = -Infinity;
+            }
+
+            if (beta > Infinity) {
+                beta = Infinity;
+            }
+
+            if (window < MaxAspirationWindow / 2) {
+                window *= 2;
+            } else {
+                window = MaxAspirationWindow;
+            }
+        }
+
+        if (context.stopped) {
             break;
         }
 
         result = depth_result;
+        previous_score = result.score;
         completed_depth = true;
 
         if (on_depth_finished) {
