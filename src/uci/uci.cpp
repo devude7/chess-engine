@@ -9,7 +9,6 @@
 #include <vector>
 
 #include "chess/board/fen.hpp"
-#include "chess/board/zobrist.hpp"
 #include "chess/core/square.hpp"
 #include "chess/search/search.hpp"
 #include "chess/uci/uci_move.hpp"
@@ -137,13 +136,13 @@ void apply_uci_moves(PositionState& state, const std::vector<std::string>& words
         UndoState undo{};
         make_move(state.board, move, undo);
         state.move_history.push_back(words[index]);
-        state.position_history.push_back(zobrist_hash(state.board));
+        state.position_history.push_back(state.board.position_hash);
     }
 }
 
 PositionState start_position_state() {
     PositionState state{board_from_fen(StartPositionFen), {}, {}};
-    state.position_history.push_back(zobrist_hash(state.board));
+    state.position_history.push_back(state.board.position_hash);
     return state;
 }
 
@@ -171,7 +170,7 @@ PositionState position_state_from_command(const std::string& line, const Positio
 
         std::string fen = words[2] + " " + words[3] + " " + words[4] + " " + words[5] + " " + words[6] + " " + words[7];
         PositionState state{board_from_fen(fen), {}, {}};
-        state.position_history.push_back(zobrist_hash(state.board));
+        state.position_history.push_back(state.board.position_hash);
 
         if (words.size() > 8 && words[8] == "moves") {
             apply_uci_moves(state, words, 9);

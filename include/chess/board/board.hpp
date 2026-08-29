@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 
 #include "chess/core/color.hpp"
 #include "chess/core/move.hpp"
@@ -23,6 +24,7 @@ struct Board {
     int en_passant_square;
     int halfmove_clock;
     int fullmove_number;
+    std::uint64_t position_hash;
 };
 
 struct UndoState {
@@ -33,6 +35,7 @@ struct UndoState {
     int en_passant_square;
     int halfmove_clock;
     int fullmove_number;
+    std::uint64_t position_hash;
 };
 
 Piece piece_at(const Board& board, int square);

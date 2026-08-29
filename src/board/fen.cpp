@@ -1,4 +1,7 @@
 #include "chess/board/fen.hpp"
+
+#include "chess/board/zobrist.hpp"
+
 #include <sstream>
 #include <string>
 
@@ -100,6 +103,7 @@ Board board_from_fen(const std::string& fen) {
     board.en_passant_square = square_from_fen(en_passant_part);
     board.halfmove_clock = std::stoi(halfmove_part);
     board.fullmove_number = std::stoi(fullmove_part);
+    board.position_hash = zobrist_hash(board);
 
     return board;
 }

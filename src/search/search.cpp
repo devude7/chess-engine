@@ -62,6 +62,7 @@ struct NullMoveState {
     int en_passant_square;
     int halfmove_clock;
     int fullmove_number;
+    std::uint64_t position_hash;
 };
 
 Move no_move() {
@@ -244,7 +245,7 @@ int count_position(const std::vector<std::uint64_t>& positions, std::uint64_t ke
 }
 
 bool is_repetition_draw(const SearchContext& context, const Board& board) {
-    return count_position(context.position_history, zobrist_hash(board)) >= 3;
+    return count_position(context.position_history, board.position_hash) >= 3;
 }
 
 bool is_search_draw(const SearchContext& context, const Board& board) {
@@ -274,11 +275,17 @@ NullMoveState make_null_move(Board& board) {
         board.side_to_move,
         board.en_passant_square,
         board.halfmove_clock,
-        board.fullmove_number
+        board.fullmove_number,
+        board.position_hash
     };
+
+    if (board.en_passant_square != NoSquare) {
+        board.position_hash ^= zobrist_en_passant_key(board.en_passant_square);
+    }
 
     board.side_to_move = opposite(board.side_to_move);
     board.en_passant_square = NoSquare;
+    board.position_hash ^= zobrist_side_to_move_key();
     ++board.halfmove_clock;
 
     if (state.side_to_move == Color::Black) {
@@ -293,6 +300,7 @@ void undo_null_move(Board& board, const NullMoveState& state) {
     board.en_passant_square = state.en_passant_square;
     board.halfmove_clock = state.halfmove_clock;
     board.fullmove_number = state.fullmove_number;
+    board.position_hash = state.position_hash;
 }
 
 Move tt_best_move(const TranspositionTable& table, std::uint64_t key) {
@@ -310,7 +318,7 @@ std::vector<Move> principal_variation_from_table(const Board& board, const Trans
     Board current_board = board;
 
     for (int ply = 0; ply < depth; ++ply) {
-        Move move = tt_best_move(table, zobrist_hash(current_board));
+        Move move = tt_best_move(table, current_board.position_hash);
 
         if (move.from == NoSquare || move.to == NoSquare) {
             break;
@@ -415,7 +423,7 @@ int negamax(Board& board, int depth, int ply, int alpha, int beta, SearchContext
 
     int original_alpha = alpha;
     int original_beta = beta;
-    std::uint64_t key = zobrist_hash(board);
+    std::uint64_t key = board.position_hash;
     auto found = context.table.find(key);
     Move tt_move = no_move();
     bool has_tt_move = false;
@@ -485,7 +493,7 @@ int negamax(Board& board, int depth, int ply, int alpha, int beta, SearchContext
             continue;
         }
 
-        std::uint64_t child_key = zobrist_hash(board);
+        std::uint64_t child_key = board.position_hash;
         context.position_history.push_back(child_key);
         int score = -negamax(board, depth - 1, ply + 1, -beta, -alpha, context);
         context.position_history.pop_back();
@@ -547,7 +555,7 @@ SearchResult find_best_move_with_context(
         return SearchResult{moves.front(), {}, 0, context.stats};
     }
 
-    std::uint64_t key = zobrist_hash(board);
+    std::uint64_t key = board.position_hash;
     Move root_tt_move = tt_best_move(context.table, key);
     bool has_root_tt_move = root_tt_move.from != NoSquare;
     Move best_move = moves.front();
@@ -564,7 +572,7 @@ SearchResult find_best_move_with_context(
             continue;
         }
 
-        std::uint64_t child_key = zobrist_hash(board);
+        std::uint64_t child_key = board.position_hash;
         context.position_history.push_back(child_key);
         int score = -negamax(board, depth - 1, 1, -beta, -alpha, context);
         context.position_history.pop_back();

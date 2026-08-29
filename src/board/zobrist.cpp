@@ -44,22 +44,50 @@ int piece_index(Piece piece) {
     return type_index + (piece.color == Color::White ? 0 : 6);
 }
 
-std::uint64_t piece_square_key(Piece piece, int square) {
-    return mix(1 + static_cast<std::uint64_t>(piece_index(piece)) * 64 + square);
 }
 
-std::uint64_t side_to_move_key() {
+std::uint64_t zobrist_piece_square_key(Piece piece, int square) {
+    int index = piece_index(piece);
+
+    if (index < 0) {
+        return 0;
+    }
+
+    return mix(1 + static_cast<std::uint64_t>(index) * 64 + square);
+}
+
+std::uint64_t zobrist_side_to_move_key() {
     return mix(1000);
 }
 
-std::uint64_t castling_key(int index) {
+std::uint64_t zobrist_castling_key(int index) {
     return mix(1100 + index);
 }
 
-std::uint64_t en_passant_key(int square) {
+std::uint64_t zobrist_en_passant_key(int square) {
     return mix(1200 + square);
 }
 
+std::uint64_t zobrist_castling_rights_key(CastlingRights castling_rights) {
+    std::uint64_t hash = 0;
+
+    if (castling_rights.white_kingside) {
+        hash ^= zobrist_castling_key(0);
+    }
+
+    if (castling_rights.white_queenside) {
+        hash ^= zobrist_castling_key(1);
+    }
+
+    if (castling_rights.black_kingside) {
+        hash ^= zobrist_castling_key(2);
+    }
+
+    if (castling_rights.black_queenside) {
+        hash ^= zobrist_castling_key(3);
+    }
+
+    return hash;
 }
 
 std::uint64_t zobrist_hash(const Board& board) {
@@ -69,32 +97,18 @@ std::uint64_t zobrist_hash(const Board& board) {
         Piece piece = board.squares[square];
 
         if (!is_empty(piece)) {
-            hash ^= piece_square_key(piece, square);
+            hash ^= zobrist_piece_square_key(piece, square);
         }
     }
 
     if (board.side_to_move == Color::Black) {
-        hash ^= side_to_move_key();
+        hash ^= zobrist_side_to_move_key();
     }
 
-    if (board.castling_rights.white_kingside) {
-        hash ^= castling_key(0);
-    }
-
-    if (board.castling_rights.white_queenside) {
-        hash ^= castling_key(1);
-    }
-
-    if (board.castling_rights.black_kingside) {
-        hash ^= castling_key(2);
-    }
-
-    if (board.castling_rights.black_queenside) {
-        hash ^= castling_key(3);
-    }
+    hash ^= zobrist_castling_rights_key(board.castling_rights);
 
     if (board.en_passant_square != NoSquare) {
-        hash ^= en_passant_key(board.en_passant_square);
+        hash ^= zobrist_en_passant_key(board.en_passant_square);
     }
 
     return hash;

@@ -1,5 +1,7 @@
 #include "chess/board/board.hpp"
 
+#include "chess/board/zobrist.hpp"
+
 namespace chess {
 
 namespace {
@@ -81,7 +83,17 @@ Piece piece_at(const Board& board, int square) {
 }
 
 void set_piece(Board& board, int square, Piece piece) {
+    Piece previous_piece = board.squares[square];
+
+    if (!is_empty(previous_piece)) {
+        board.position_hash ^= zobrist_piece_square_key(previous_piece, square);
+    }
+
     board.squares[square] = piece;
+
+    if (!is_empty(piece)) {
+        board.position_hash ^= zobrist_piece_square_key(piece, square);
+    }
 }
 
 Board empty_board() {
@@ -96,6 +108,7 @@ Board empty_board() {
     board.en_passant_square = NoSquare;
     board.halfmove_clock = 0;
     board.fullmove_number = 1;
+    board.position_hash = 0;
 
     return board;
 }
@@ -133,6 +146,7 @@ bool make_move(Board& board, Move move, UndoState& undo) {
     undo.en_passant_square = board.en_passant_square;
     undo.halfmove_clock = board.halfmove_clock;
     undo.fullmove_number = board.fullmove_number;
+    undo.position_hash = board.position_hash;
 
     set_piece(board, move.from, empty_piece());
 
@@ -151,6 +165,8 @@ bool make_move(Board& board, Move move, UndoState& undo) {
         move_castling_rook(board, move);
     }
 
+    CastlingRights previous_castling_rights = board.castling_rights;
+
     if (moving_piece.type == PieceType::King) {
         remove_castling_rights_for_king(board, moving_piece.color);
     } else if (moving_piece.type == PieceType::Rook) {
@@ -161,9 +177,17 @@ bool make_move(Board& board, Move move, UndoState& undo) {
         remove_castling_rights_for_rook(board, captured_square, captured_piece.color);
     }
 
+    board.position_hash ^= zobrist_castling_rights_key(previous_castling_rights);
+    board.position_hash ^= zobrist_castling_rights_key(board.castling_rights);
+
+    if (board.en_passant_square != NoSquare) {
+        board.position_hash ^= zobrist_en_passant_key(board.en_passant_square);
+    }
+
     board.en_passant_square = NoSquare;
     if (moving_piece.type == PieceType::Pawn && (move.to - move.from == 16 || move.from - move.to == 16)) {
         board.en_passant_square = (move.from + move.to) / 2;
+        board.position_hash ^= zobrist_en_passant_key(board.en_passant_square);
     }
 
     if (moving_piece.type == PieceType::Pawn || !is_empty(captured_piece)) {
@@ -177,6 +201,7 @@ bool make_move(Board& board, Move move, UndoState& undo) {
     }
 
     board.side_to_move = opposite(board.side_to_move);
+    board.position_hash ^= zobrist_side_to_move_key();
 
     return true;
 }
@@ -198,6 +223,7 @@ void undo_move(Board& board, Move move, const UndoState& undo) {
     board.en_passant_square = undo.en_passant_square;
     board.halfmove_clock = undo.halfmove_clock;
     board.fullmove_number = undo.fullmove_number;
+    board.position_hash = undo.position_hash;
 }
 
 } 
