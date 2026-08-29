@@ -28,6 +28,8 @@ constexpr int KillerMoveScore = 9000;
 constexpr int HistoryScoreLimit = 1000000;
 constexpr int InitialAspirationWindow = 50;
 constexpr int MaxAspirationWindow = Infinity;
+constexpr int NullMoveMinDepth = 3;
+constexpr int NullMoveReduction = 2;
 
 enum class BoundType {
     Exact,
@@ -55,6 +57,13 @@ struct SearchContext {
     std::vector<std::string> position_history;
     std::function<bool()> should_stop;
     bool stopped;
+};
+
+struct NullMoveState {
+    Color side_to_move;
+    int en_passant_square;
+    int halfmove_clock;
+    int fullmove_number;
 };
 
 Move no_move() {
@@ -246,6 +255,48 @@ bool is_search_draw(const SearchContext& context, const Board& board) {
         || is_repetition_draw(context, board);
 }
 
+bool has_non_pawn_material_for_color(const Board& board, Color color) {
+    for (Piece piece : board.squares) {
+        if (piece.color == color && piece.type != PieceType::None && piece.type != PieceType::Pawn && piece.type != PieceType::King) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool can_try_null_move(const Board& board, int depth) {
+    return depth >= NullMoveMinDepth
+        && !is_in_check(board, board.side_to_move)
+        && has_non_pawn_material_for_color(board, board.side_to_move);
+}
+
+NullMoveState make_null_move(Board& board) {
+    NullMoveState state{
+        board.side_to_move,
+        board.en_passant_square,
+        board.halfmove_clock,
+        board.fullmove_number
+    };
+
+    board.side_to_move = opposite(board.side_to_move);
+    board.en_passant_square = NoSquare;
+    ++board.halfmove_clock;
+
+    if (state.side_to_move == Color::Black) {
+        ++board.fullmove_number;
+    }
+
+    return state;
+}
+
+void undo_null_move(Board& board, const NullMoveState& state) {
+    board.side_to_move = state.side_to_move;
+    board.en_passant_square = state.en_passant_square;
+    board.halfmove_clock = state.halfmove_clock;
+    board.fullmove_number = state.fullmove_number;
+}
+
 Move tt_best_move(const TranspositionTable& table, std::uint64_t key) {
     auto found = table.find(key);
 
@@ -322,6 +373,27 @@ int negamax(Board& board, int depth, int ply, int alpha, int beta, SearchContext
                 ++context.stats.tt_hits;
                 return entry.score;
             }
+        }
+    }
+
+    if (can_try_null_move(board, depth)) {
+        NullMoveState null_move_state = make_null_move(board);
+        int reduced_depth = depth - 1 - NullMoveReduction;
+
+        if (reduced_depth < 0) {
+            reduced_depth = 0;
+        }
+
+        int null_move_score = -negamax(board, reduced_depth, ply + 1, -beta, -beta + 1, context);
+        undo_null_move(board, null_move_state);
+
+        if (context.stopped) {
+            return evaluate_for_side_to_move(board);
+        }
+
+        if (null_move_score >= beta) {
+            context.table[key] = TranspositionEntry{depth, beta, BoundType::LowerBound, no_move(), false};
+            return beta;
         }
     }
 
