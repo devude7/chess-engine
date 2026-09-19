@@ -20,7 +20,6 @@ namespace {
 
 constexpr int Infinity = 1000000;
 constexpr int MateScore = 100000;
-constexpr int RepetitionPenalty = 200;
 constexpr int MaxPly = 128;
 constexpr int KillerMoveScore = 9000;
 constexpr int HistoryScoreLimit = 1000000;
@@ -226,10 +225,6 @@ void order_moves(const Board& board, MoveList& moves) {
     order_moves(board, moves, no_move(), false);
 }
 
-bool contains_position(const std::vector<std::uint64_t>& positions, std::uint64_t key) {
-    return std::find(positions.begin(), positions.end(), key) != positions.end();
-}
-
 int count_position(const std::vector<std::uint64_t>& positions, std::uint64_t key) {
     return static_cast<int>(std::count(positions.begin(), positions.end(), key));
 }
@@ -242,6 +237,18 @@ bool is_search_draw(const SearchContext& context, const Board& board) {
     return is_fifty_move_rule_draw(board)
         || has_insufficient_material(board)
         || is_repetition_draw(context, board);
+}
+
+int score_to_tt(int score, int ply) {
+    if (score >= MateScore - MaxPly) return score + ply;
+    if (score <= -MateScore + MaxPly) return score - ply;
+    return score;
+}
+
+int score_from_tt(int score, int ply) {
+    if (score >= MateScore - MaxPly) return score - ply;
+    if (score <= -MateScore + MaxPly) return score + ply;
+    return score;
 }
 
 Move tt_best_move(const TranspositionTable& table, std::uint64_t key) {
@@ -277,14 +284,26 @@ std::vector<Move> principal_variation_from_table(const Board& board, const Trans
     return line;
 }
 
-int quiescence_search(Board& board, int ply, int alpha, int beta, SearchStats& stats) {
-    ++stats.nodes;
+int quiescence_search(Board& board, int ply, int alpha, int beta, SearchContext& context) {
+    ++context.stats.nodes;
 
-    if (is_in_check(board, board.side_to_move)) {
+    if (context.should_stop && context.should_stop()) {
+        context.stopped = true;
+        return evaluate_for_side_to_move(board);
+    }
+
+    bool in_check = is_in_check(board, board.side_to_move);
+    if (in_check) {
         MoveList moves = generate_legal_moves(board);
 
         if (moves.empty()) {
             return -MateScore + ply;
+        }
+
+        if (is_search_draw(context, board)) return 0;
+
+        if (ply >= MaxPly) {
+            return evaluate_for_side_to_move(board);
         }
 
         order_moves(board, moves);
@@ -296,8 +315,12 @@ int quiescence_search(Board& board, int ply, int alpha, int beta, SearchStats& s
                 continue;
             }
 
-            int score = -quiescence_search(board, ply + 1, -beta, -alpha, stats);
+            context.position_history.push_back(board.position_hash);
+            int score = -quiescence_search(board, ply + 1, -beta, -alpha, context);
+            context.position_history.pop_back();
             undo_move(board, move, undo);
+
+            if (context.stopped) return evaluate_for_side_to_move(board);
 
             if (score >= beta) {
                 return beta;
@@ -311,7 +334,11 @@ int quiescence_search(Board& board, int ply, int alpha, int beta, SearchStats& s
         return alpha;
     }
 
+    if (is_search_draw(context, board)) return 0;
+
     int stand_pat = evaluate_for_side_to_move(board);
+
+    if (ply >= MaxPly) return stand_pat;
 
     if (stand_pat >= beta) {
         return beta;
@@ -331,8 +358,12 @@ int quiescence_search(Board& board, int ply, int alpha, int beta, SearchStats& s
             continue;
         }
 
-        int score = -quiescence_search(board, ply + 1, -beta, -alpha, stats);
+        context.position_history.push_back(board.position_hash);
+        int score = -quiescence_search(board, ply + 1, -beta, -alpha, context);
+        context.position_history.pop_back();
         undo_move(board, move, undo);
+
+        if (context.stopped) return evaluate_for_side_to_move(board);
 
         if (score >= beta) {
             return beta;
@@ -354,12 +385,15 @@ int negamax(Board& board, int depth, int ply, int alpha, int beta, SearchContext
         return evaluate_for_side_to_move(board);
     }
 
-    if (depth == 0) {
-        return quiescence_search(board, ply, alpha, beta, context.stats);
+    if (is_search_draw(context, board)) {
+        if (is_in_check(board, board.side_to_move) && generate_legal_moves(board).empty()) {
+            return -MateScore + ply;
+        }
+        return 0;
     }
 
-    if (is_search_draw(context, board)) {
-        return 0;
+    if (depth == 0 || ply >= MaxPly) {
+        return quiescence_search(board, ply, alpha, beta, context);
     }
 
     int original_alpha = alpha;
@@ -371,23 +405,24 @@ int negamax(Board& board, int depth, int ply, int alpha, int beta, SearchContext
 
     if (found != context.table.end()) {
         const TranspositionEntry& entry = found->second;
+        int tt_score = score_from_tt(entry.score, ply);
         tt_move = entry.best_move;
         has_tt_move = entry.has_best_move;
 
         if (entry.depth >= depth) {
             if (entry.bound == BoundType::Exact) {
                 ++context.stats.tt_hits;
-                return entry.score;
+                return tt_score;
             }
 
-            if (entry.bound == BoundType::LowerBound && entry.score >= beta) {
+            if (entry.bound == BoundType::LowerBound && tt_score >= beta) {
                 ++context.stats.tt_hits;
-                return entry.score;
+                return tt_score;
             }
 
-            if (entry.bound == BoundType::UpperBound && entry.score <= alpha) {
+            if (entry.bound == BoundType::UpperBound && tt_score <= alpha) {
                 ++context.stats.tt_hits;
-                return entry.score;
+                return tt_score;
             }
         }
     }
@@ -450,7 +485,7 @@ int negamax(Board& board, int depth, int ply, int alpha, int beta, SearchContext
         bound = BoundType::LowerBound;
     }
 
-    context.table[key] = TranspositionEntry{depth, best_score, bound, best_move, best_move.from != NoSquare};
+    context.table[key] = TranspositionEntry{depth, score_to_tt(best_score, ply), bound, best_move, best_move.from != NoSquare};
 
     return best_score;
 }
@@ -458,7 +493,6 @@ int negamax(Board& board, int depth, int ply, int alpha, int beta, SearchContext
 SearchResult find_best_move_with_context(
     Board& board,
     int depth,
-    const std::vector<std::uint64_t>& recent_positions,
     SearchContext& context,
     int alpha,
     int beta
@@ -492,14 +526,9 @@ SearchResult find_best_move_with_context(
             continue;
         }
 
-        std::uint64_t child_key = board.position_hash;
-        context.position_history.push_back(child_key);
+        context.position_history.push_back(board.position_hash);
         int score = -negamax(board, depth - 1, 1, -beta, -alpha, context);
         context.position_history.pop_back();
-
-        if (contains_position(recent_positions, child_key)) {
-            score -= RepetitionPenalty;
-        }
 
         undo_move(board, move, undo);
 
@@ -551,7 +580,7 @@ SearchResult find_best_move(Board& board, int depth) {
 
 SearchResult find_best_move(Board& board, int depth, const std::vector<std::uint64_t>& recent_positions) {
     SearchContext context = make_search_context(recent_positions);
-    return find_best_move_with_context(board, depth, recent_positions, context, -Infinity, Infinity);
+    return find_best_move_with_context(board, depth, context, -Infinity, Infinity);
 }
 
 SearchResult find_best_move_iterative(
@@ -583,7 +612,7 @@ SearchResult find_best_move_iterative(
 
         while (true) {
             context.stopped = false;
-            depth_result = find_best_move_with_context(board, depth, recent_positions, context, alpha, beta);
+            depth_result = find_best_move_with_context(board, depth, context, alpha, beta);
 
             if (context.stopped) {
                 if (!completed_depth) {
@@ -669,7 +698,11 @@ int quiescence(Board& board, int alpha, int beta) {
 }
 
 int quiescence(Board& board, int alpha, int beta, SearchStats& stats) {
-    return quiescence_search(board, 0, alpha, beta, stats);
+    SearchContext context = make_search_context();
+    context.stats = stats;
+    int score = quiescence_search(board, 0, alpha, beta, context);
+    stats = context.stats;
+    return score;
 }
 
 }

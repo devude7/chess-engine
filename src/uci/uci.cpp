@@ -3,7 +3,6 @@
 #include <chrono>
 #include <cstdlib>
 #include <iostream>
-#include <optional>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -36,7 +35,6 @@ struct GoOptions {
 struct PositionState {
     Board board;
     std::vector<std::uint64_t> position_history;
-    std::vector<std::string> move_history;
 };
 
 std::vector<std::string> split_words(const std::string& text) {
@@ -63,20 +61,6 @@ bool parse_int(const std::string& text, int& value) {
     return true;
 }
 
-std::string move_history_key(const std::vector<std::string>& move_history) {
-    std::string key;
-
-    for (const std::string& move : move_history) {
-        if (!key.empty()) {
-            key += ' ';
-        }
-
-        key += move;
-    }
-
-    return key;
-}
-
 std::string principal_variation_text(const SearchResult& result) {
     if (result.principal_variation.empty()) {
         return move_to_uci(result.best_move);
@@ -95,36 +79,6 @@ std::string principal_variation_text(const SearchResult& result) {
     return text;
 }
 
-std::optional<std::string> opening_book_move(const std::vector<std::string>& move_history) {
-    std::string key = move_history_key(move_history);
-
-    if (key.empty()) {
-        return "e2e4";
-    }
-
-    if (key == "e2e4") {
-        return "e7e5";
-    }
-
-    if (key == "e2e4 e7e5") {
-        return "g1f3";
-    }
-
-    if (key == "e2e4 e7e5 g1f3") {
-        return "b8c6";
-    }
-
-    if (key == "d2d4") {
-        return "d7d5";
-    }
-
-    if (key == "d2d4 d7d5") {
-        return "c2c4";
-    }
-
-    return std::nullopt;
-}
-
 void apply_uci_moves(PositionState& state, const std::vector<std::string>& words, int first_move_index) {
     for (int index = first_move_index; index < static_cast<int>(words.size()); ++index) {
         Move move = move_from_uci(state.board, words[index]);
@@ -135,13 +89,12 @@ void apply_uci_moves(PositionState& state, const std::vector<std::string>& words
 
         UndoState undo{};
         make_move(state.board, move, undo);
-        state.move_history.push_back(words[index]);
         state.position_history.push_back(state.board.position_hash);
     }
 }
 
 PositionState start_position_state() {
-    PositionState state{board_from_fen(StartPositionFen), {}, {}};
+    PositionState state{board_from_fen(StartPositionFen), {}};
     state.position_history.push_back(state.board.position_hash);
     return state;
 }
@@ -169,7 +122,7 @@ PositionState position_state_from_command(const std::string& line, const Positio
         }
 
         std::string fen = words[2] + " " + words[3] + " " + words[4] + " " + words[5] + " " + words[6] + " " + words[7];
-        PositionState state{board_from_fen(fen), {}, {}};
+        PositionState state{board_from_fen(fen), {}};
         state.position_history.push_back(state.board.position_hash);
 
         if (words.size() > 8 && words[8] == "moves") {
@@ -296,20 +249,6 @@ void run_uci_loop(std::istream& input, std::ostream& output) {
             state = position_state_from_command(line, state);
         } else if (line.rfind("go", 0) == 0) {
             GoOptions go_options = apply_clock_time(options_from_go_command(line), state.board.side_to_move);
-            std::optional<std::string> book_move_text = opening_book_move(state.move_history);
-
-            if (book_move_text.has_value()) {
-                Move book_move = move_from_uci(state.board, *book_move_text);
-
-                if (book_move.from != NoSquare && book_move.to != NoSquare) {
-                    output << "info string book move\n";
-                    output << "info depth 0 score cp 0 time 0 pv " << *book_move_text << '\n';
-                    output << "bestmove " << *book_move_text << '\n';
-                    output.flush();
-                    continue;
-                }
-            }
-
             auto search_start_time = std::chrono::steady_clock::now();
             auto search_deadline = search_start_time + std::chrono::milliseconds(go_options.movetime_ms);
             SearchResult final_result = find_best_move_iterative(

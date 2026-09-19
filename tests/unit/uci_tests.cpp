@@ -34,6 +34,7 @@ void test_go_depth_returns_bestmove() {
     chess::run_uci_loop(input, output);
 
     assert(output.str().find("bestmove ") != std::string::npos);
+    assert(output.str().find("info depth 1") != std::string::npos);
 }
 
 void test_position_moves_are_applied() {
@@ -43,15 +44,6 @@ void test_position_moves_are_applied() {
     chess::run_uci_loop(input, output);
 
     assert(output.str().find("bestmove ") != std::string::npos);
-}
-
-void test_opening_book_plays_first_move() {
-    std::istringstream input("position startpos\ngo depth 1\nquit\n");
-    std::ostringstream output;
-
-    chess::run_uci_loop(input, output);
-
-    assert(output.str().find("bestmove e2e4") != std::string::npos);
 }
 
 void test_invalid_depth_falls_back_to_default() {
@@ -140,7 +132,6 @@ int main() {
     test_isready_returns_readyok();
     test_go_depth_returns_bestmove();
     test_position_moves_are_applied();
-    test_opening_book_plays_first_move();
     test_invalid_depth_falls_back_to_default();
     test_go_outputs_search_info();
     test_go_depth_outputs_each_iterative_depth();

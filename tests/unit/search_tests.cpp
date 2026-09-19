@@ -62,7 +62,7 @@ void test_promotion_scores_higher_than_quiet_move() {
 }
 
 void test_quiescence_returns_static_evaluation_in_quiet_position() {
-    chess::Board board = chess::board_from_fen("7k/8/8/8/8/8/8/4K3 w - - 0 1");
+    chess::Board board = chess::board_from_fen("7k/8/8/8/8/8/8/R3K3 w Q - 0 1");
 
     assert(chess::quiescence(board, -1000000, 1000000) == chess::evaluate(board));
 }
@@ -88,7 +88,7 @@ void test_quiescence_searches_check_evasions() {
     assert(stats.nodes > 1);
 }
 
-void test_repetition_penalty_can_change_root_choice() {
+void test_one_previous_occurrence_does_not_penalize_root_move() {
     chess::Board board = chess::board_from_fen("8/8/8/8/8/8/8/R3K2k w Q - 0 1");
     chess::SearchResult without_history = chess::find_best_move(board, 1);
 
@@ -99,13 +99,33 @@ void test_repetition_penalty_can_change_root_choice() {
     std::vector<std::uint64_t> recent_positions{chess::zobrist_hash(after_best_move)};
     chess::SearchResult with_history = chess::find_best_move(board, 1, recent_positions);
 
-    bool changed_move = with_history.best_move.from != without_history.best_move.from
-        || with_history.best_move.to != without_history.best_move.to;
-    bool penalized_same_move = with_history.score < without_history.score;
-
     assert(without_history.best_move.from != chess::NoSquare);
     assert(with_history.best_move.from != chess::NoSquare);
-    assert(changed_move || penalized_same_move);
+    assert(with_history.score == without_history.score);
+}
+
+void test_search_scores_draw_at_quiescence_boundary() {
+    chess::Board board = chess::board_from_fen("8/8/8/8/8/8/8/R3K2k w Q - 100 51");
+    chess::Board next = board;
+    chess::UndoState undo{};
+    chess::Move move{0, 8, chess::MoveType::Normal, chess::PieceType::None};
+    assert(chess::make_move(next, move, undo));
+    assert(chess::quiescence(next, -1000000, 1000000) == 0);
+}
+
+void test_checkmate_takes_precedence_over_fifty_move_draw() {
+    chess::Board board = chess::board_from_fen("7k/6Q1/5K2/8/8/8/8/8 b - - 100 51");
+    assert(chess::quiescence(board, -1000000, 1000000) < -99000);
+}
+
+void test_search_can_stop_during_quiescence() {
+    chess::Board board = chess::board_from_fen("4r1k1/8/8/4R3/8/8/8/4K3 b - - 0 1");
+    int checks = 0;
+    chess::SearchResult result = chess::find_best_move_iterative(
+        board, 10, {}, [](int, const chess::SearchResult&) {}, [&checks]() { return ++checks >= 3; }
+    );
+    assert(checks >= 3);
+    assert(result.best_move.from != chess::NoSquare);
 }
 
 void test_transposition_table_is_used_during_deeper_search() {
@@ -196,7 +216,10 @@ int main() {
     test_quiescence_returns_static_evaluation_in_quiet_position();
     test_quiescence_sees_immediate_capture();
     test_quiescence_searches_check_evasions();
-    test_repetition_penalty_can_change_root_choice();
+    test_one_previous_occurrence_does_not_penalize_root_move();
+    test_search_scores_draw_at_quiescence_boundary();
+    test_checkmate_takes_precedence_over_fifty_move_draw();
+    test_search_can_stop_during_quiescence();
     test_transposition_table_is_used_during_deeper_search();
     test_search_prefers_immediate_checkmate();
     test_search_scores_fifty_move_rule_as_draw();
