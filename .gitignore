@@ -67,3 +67,8 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+
+# NNUE training artifacts
+data/nnue/
+models/nnue/checkpoints/
+tools/nnue/__pycache__/
