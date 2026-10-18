@@ -8,7 +8,13 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 
 
-INPUT_SIZE = 769 # 12 x 64 + 1 (piece x squares + who's move)
+PIECE_FEATURE_COUNT = 12 * 64
+SIDE_TO_MOVE_INDEX = PIECE_FEATURE_COUNT
+WHITE_KINGSIDE_CASTLING_INDEX = SIDE_TO_MOVE_INDEX + 1
+WHITE_QUEENSIDE_CASTLING_INDEX = SIDE_TO_MOVE_INDEX + 2
+BLACK_KINGSIDE_CASTLING_INDEX = SIDE_TO_MOVE_INDEX + 3
+BLACK_QUEENSIDE_CASTLING_INDEX = SIDE_TO_MOVE_INDEX + 4
+INPUT_SIZE = PIECE_FEATURE_COUNT + 1 + 4
 HIDDEN_SIZE = 64
 SCORE_SCALE = 1000.0
 MAX_SCORE_CP = 1500
@@ -23,7 +29,21 @@ def encode_fen(fen):
         piece_index = color_offset + piece.piece_type - 1
         feature_index = piece_index * 64 + square
         features[feature_index] = 1.0
-    features[768] = 1.0 if board.turn == chess.WHITE else 0.0
+    features[SIDE_TO_MOVE_INDEX] = (
+        1.0 if board.turn == chess.WHITE else 0.0
+    )
+    features[WHITE_KINGSIDE_CASTLING_INDEX] = float(
+        board.has_kingside_castling_rights(chess.WHITE)
+    )
+    features[WHITE_QUEENSIDE_CASTLING_INDEX] = float(
+        board.has_queenside_castling_rights(chess.WHITE)
+    )
+    features[BLACK_KINGSIDE_CASTLING_INDEX] = float(
+        board.has_kingside_castling_rights(chess.BLACK)
+    )
+    features[BLACK_QUEENSIDE_CASTLING_INDEX] = float(
+        board.has_queenside_castling_rights(chess.BLACK)
+    )
 
     return features
 
@@ -99,14 +119,14 @@ class EvaluationNetwork(torch.nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.layers = torch.nn.Sequential(
-            torch.nn.Linear(INPUT_SIZE, HIDDEN_SIZE),
-            torch.nn.ReLU(),
-            torch.nn.Linear(HIDDEN_SIZE, 1),
-        )
+        self.hidden_layer = torch.nn.Linear(INPUT_SIZE, HIDDEN_SIZE)
+        self.output_layer = torch.nn.Linear(HIDDEN_SIZE, 1)
 
     def forward(self, features):
-        return self.layers(features)
+        values = self.hidden_layer(features)
+        values = torch.relu(values)
+
+        return self.output_layer(values)
 
 
 def train_one_epoch(model, data_loader, loss_function, optimizer, device):
@@ -172,13 +192,14 @@ def main():
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("models/nnue/checkpoints/model.pt"),
+        default=Path("models/nnue/checkpoints/model_100k_castling.pt"),
     )
 
     parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--learning-rate", type=float, default=0.001)
     parser.add_argument("--validation-fraction", type=float, default=0.2)
+    parser.add_argument("--patience", type=int, default=4)
     parser.add_argument("--seed", type=int, default=42)
 
     args = parser.parse_args()
@@ -230,6 +251,8 @@ def main():
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
     best_validation_loss = float("inf")
+    best_epoch = 0
+    epochs_without_improvement = 0
 
     for epoch in range(1, args.epochs + 1):
         training_loss = train_one_epoch(
@@ -256,6 +279,8 @@ def main():
 
         if validation_loss < best_validation_loss:
             best_validation_loss = validation_loss
+            best_epoch = epoch
+            epochs_without_improvement = 0
 
             torch.save(
                 {
@@ -266,10 +291,21 @@ def main():
                     "max_score_cp": MAX_SCORE_CP,
                     "epoch": epoch,
                     "validation_loss": validation_loss,
+                    "validation_mae_cp": validation_error_cp,
                 },
                 args.output,
             )
+        else:
+            epochs_without_improvement += 1
 
+            if epochs_without_improvement >= args.patience:
+                print(
+                    "Early stopping: validation loss did not improve "
+                    f"for {args.patience} epochs"
+                )
+                break
+
+    print(f"Best epoch: {best_epoch}")
     print(f"Best model saved to: {args.output}")
 
 
