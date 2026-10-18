@@ -2,6 +2,7 @@
 #include <sstream>
 #include <string>
 
+#include "chess/search/nnue.hpp"
 #include "chess/uci/uci.hpp"
 
 namespace {
@@ -15,7 +16,40 @@ void test_uci_identifies_engine() {
     std::string text = output.str();
     assert(text.find("id name devuChess") != std::string::npos);
     assert(text.find("id author devude") != std::string::npos);
+    assert(text.find("option name UseNNUE type check default false") != std::string::npos);
+    assert(text.find("option name EvalFile type string default <empty>") != std::string::npos);
     assert(text.find("uciok") != std::string::npos);
+}
+
+void test_setoption_toggles_nnue() {
+    std::istringstream input(
+        "setoption name UseNNUE value true\n"
+        "setoption name UseNNUE value false\n"
+        "quit\n"
+    );
+    std::ostringstream output;
+
+    chess::run_uci_loop(input, output);
+
+    std::string text = output.str();
+    assert(text.find("info string NNUE enabled") != std::string::npos);
+    assert(text.find("info string NNUE disabled") != std::string::npos);
+    assert(!chess::nnue_is_enabled());
+}
+
+void test_eval_reports_static_evaluation_source() {
+    chess::set_nnue_enabled(false);
+    chess::unload_nnue();
+
+    std::istringstream input("position startpos\neval\nquit\n");
+    std::ostringstream output;
+
+    chess::run_uci_loop(input, output);
+
+    assert(
+        output.str().find("info string eval cp 0 source classical")
+        != std::string::npos
+    );
 }
 
 void test_isready_returns_readyok() {
@@ -129,6 +163,8 @@ void test_go_clock_time_returns_bestmove() {
 
 int main() {
     test_uci_identifies_engine();
+    test_setoption_toggles_nnue();
+    test_eval_reports_static_evaluation_source();
     test_isready_returns_readyok();
     test_go_depth_returns_bestmove();
     test_position_moves_are_applied();

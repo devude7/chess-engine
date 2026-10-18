@@ -18,6 +18,7 @@ add_library(chess_engine_core
     src/movegen/move_generator.cpp
     src/movegen/perft.cpp
     src/search/evaluation.cpp
+    src/search/nnue.cpp
     src/search/search.cpp
     src/uci/uci.cpp
     src/uci/uci_move.cpp
@@ -115,6 +116,17 @@ target_link_libraries(evaluation_tests
 )
 
 add_test(NAME evaluation_tests COMMAND evaluation_tests)
+
+add_executable(nnue_tests
+    tests/unit/nnue_tests.cpp
+)
+
+target_link_libraries(nnue_tests
+    PRIVATE
+        chess_engine_core
+)
+
+add_test(NAME nnue_tests COMMAND nnue_tests)
 
 add_executable(search_tests
     tests/unit/search_tests.cpp

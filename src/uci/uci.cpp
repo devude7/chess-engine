@@ -9,6 +9,8 @@
 
 #include "chess/board/fen.hpp"
 #include "chess/core/square.hpp"
+#include "chess/search/evaluation.hpp"
+#include "chess/search/nnue.hpp"
 #include "chess/search/search.hpp"
 #include "chess/uci/uci_move.hpp"
 
@@ -224,6 +226,39 @@ GoOptions apply_clock_time(const GoOptions& options, Color side_to_move) {
     return updated_options;
 }
 
+std::string value_from_setoption(const std::string& line, const std::string& name) {
+    std::string prefix = "setoption name " + name + " value ";
+
+    if (line.rfind(prefix, 0) != 0) {
+        return "";
+    }
+
+    return line.substr(prefix.size());
+}
+
+void apply_setoption(const std::string& line, std::ostream& output) {
+    std::string use_nnue = value_from_setoption(line, "UseNNUE");
+
+    if (!use_nnue.empty()) {
+        bool enabled = use_nnue == "true" || use_nnue == "1";
+        set_nnue_enabled(enabled);
+        output << "info string NNUE "
+               << (enabled ? "enabled" : "disabled") << '\n';
+        output.flush();
+        return;
+    }
+
+    std::string eval_file = value_from_setoption(line, "EvalFile");
+
+    if (!eval_file.empty()) {
+        bool loaded = load_nnue(eval_file);
+        output << "info string NNUE weights "
+               << (loaded ? "loaded" : "failed to load")
+               << ": " << eval_file << '\n';
+        output.flush();
+    }
+}
+
 }
 
 void run_uci_loop() {
@@ -238,15 +273,25 @@ void run_uci_loop(std::istream& input, std::ostream& output) {
         if (line == "uci") {
             output << "id name devuChess\n";
             output << "id author devude\n";
+            output << "option name UseNNUE type check default false\n";
+            output << "option name EvalFile type string default <empty>\n";
             output << "uciok\n";
             output.flush();
         } else if (line == "isready") {
             output << "readyok\n";
             output.flush();
+        } else if (line.rfind("setoption", 0) == 0) {
+            apply_setoption(line, output);
         } else if (line == "ucinewgame") {
             state = start_position_state();
         } else if (line.rfind("position", 0) == 0) {
             state = position_state_from_command(line, state);
+        } else if (line == "eval") {
+            bool using_nnue = nnue_is_enabled() && nnue_is_loaded();
+            output << "info string eval cp " << evaluate(state.board)
+                   << " source " << (using_nnue ? "nnue" : "classical")
+                   << '\n';
+            output.flush();
         } else if (line.rfind("go", 0) == 0) {
             GoOptions go_options = apply_clock_time(options_from_go_command(line), state.board.side_to_move);
             auto search_start_time = std::chrono::steady_clock::now();

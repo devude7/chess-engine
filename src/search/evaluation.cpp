@@ -1,6 +1,7 @@
 #include "chess/search/evaluation.hpp"
 
 #include "chess/core/square.hpp"
+#include "chess/search/nnue.hpp"
 
 namespace chess {
 
@@ -466,7 +467,7 @@ int piece_square_value(Piece piece, int square) {
     return table[table_square];
 }
 
-int evaluate(const Board& board) {
+int evaluate_classical(const Board& board) {
     int score = 0;
 
     for (int square = 0; square < 64; ++square) {
@@ -486,6 +487,14 @@ int evaluate(const Board& board) {
         + rook_file_score(board)
         + king_safety_score(board)
         + endgame_mop_up_bonus(board);
+}
+
+int evaluate(const Board& board) {
+    if (nnue_is_enabled() && nnue_is_loaded()) {
+        return evaluate_nnue(board);
+    }
+
+    return evaluate_classical(board);
 }
 
 }
