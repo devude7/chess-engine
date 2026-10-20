@@ -8,7 +8,7 @@ import torch
 MAGIC = b"DEVUNNUE"
 FORMAT_VERSION = 1
 EXPECTED_INPUT_SIZE = 773
-EXPECTED_HIDDEN_SIZE = 64
+SUPPORTED_HIDDEN_SIZES = (64, 256, 512)
 
 
 def write_tensor(target, tensor):
@@ -60,9 +60,9 @@ def main():
             f"Expected input size {EXPECTED_INPUT_SIZE}, got {input_size}"
         )
 
-    if hidden_size != EXPECTED_HIDDEN_SIZE:
+    if hidden_size not in SUPPORTED_HIDDEN_SIZES:
         raise ValueError(
-            f"Expected hidden size {EXPECTED_HIDDEN_SIZE}, got {hidden_size}"
+            f"Expected hidden size in {SUPPORTED_HIDDEN_SIZES}, got {hidden_size}"
         )
 
     if score_scale is None or score_scale <= 0:

@@ -19,7 +19,7 @@ constexpr std::array<char, 8> FileMagic{
 };
 constexpr std::uint32_t FormatVersion = 1;
 constexpr int InputSize = 773;
-constexpr int HiddenSize = 64;
+constexpr int MaxHiddenSize = 512;
 constexpr int SideToMoveIndex = 768;
 constexpr int WhiteKingsideCastlingIndex = 769;
 constexpr int WhiteQueensideCastlingIndex = 770;
@@ -27,6 +27,7 @@ constexpr int BlackKingsideCastlingIndex = 771;
 constexpr int BlackQueensideCastlingIndex = 772;
 
 struct NnueModel {
+    int hidden_size = 0;
     std::vector<float> hidden_weights;
     std::vector<float> hidden_bias;
     std::vector<float> output_weights;
@@ -65,9 +66,10 @@ int feature_index(Piece piece, int square) {
     return piece_index * 64 + square;
 }
 
-void activate_feature(std::array<float, HiddenSize>& hidden, int index) {
-    for (int neuron = 0; neuron < HiddenSize; ++neuron) {
-        hidden[neuron] += Model.hidden_weights[neuron * InputSize + index];
+void activate_feature(std::array<float, MaxHiddenSize>& hidden, int index) {
+    const float* weights = Model.hidden_weights.data() + index * Model.hidden_size;
+    for (int neuron = 0; neuron < Model.hidden_size; ++neuron) {
+        hidden[neuron] += weights[neuron];
     }
 }
 
@@ -99,16 +101,17 @@ bool load_nnue(const std::string& path) {
     if (magic != FileMagic
         || version != FormatVersion
         || input_size != InputSize
-        || hidden_size != HiddenSize
+        || (hidden_size != 64 && hidden_size != 256 && hidden_size != 512)
         || !std::isfinite(score_scale)
         || score_scale <= 0.0F) {
         return false;
     }
 
     NnueModel loaded_model;
-    loaded_model.hidden_weights.resize(HiddenSize * InputSize);
-    loaded_model.hidden_bias.resize(HiddenSize);
-    loaded_model.output_weights.resize(HiddenSize);
+    loaded_model.hidden_size = static_cast<int>(hidden_size);
+    loaded_model.hidden_weights.resize(hidden_size * InputSize);
+    loaded_model.hidden_bias.resize(hidden_size);
+    loaded_model.output_weights.resize(hidden_size);
     loaded_model.score_scale = score_scale;
 
     if (!read_values(input, loaded_model.hidden_weights)
@@ -128,6 +131,17 @@ bool load_nnue(const std::string& path) {
         || !std::isfinite(loaded_model.output_bias)) {
         return false;
     }
+
+    // Files retain the PyTorch neuron-major layout. Keep each feature's weights
+    // contiguous in memory so evaluation can add one whole row at a time.
+    std::vector<float> feature_weights(loaded_model.hidden_weights.size());
+    for (int feature = 0; feature < InputSize; ++feature) {
+        for (int neuron = 0; neuron < loaded_model.hidden_size; ++neuron) {
+            feature_weights[feature * loaded_model.hidden_size + neuron] =
+                loaded_model.hidden_weights[neuron * InputSize + feature];
+        }
+    }
+    loaded_model.hidden_weights = std::move(feature_weights);
 
     loaded_model.loaded = true;
     Model = std::move(loaded_model);
@@ -155,7 +169,7 @@ int evaluate_nnue(const Board& board) {
         return 0;
     }
 
-    std::array<float, HiddenSize> hidden{};
+    std::array<float, MaxHiddenSize> hidden{};
     std::copy(Model.hidden_bias.begin(), Model.hidden_bias.end(), hidden.begin());
 
     for (int square = 0; square < 64; ++square) {
@@ -188,7 +202,7 @@ int evaluate_nnue(const Board& board) {
 
     float output = Model.output_bias;
 
-    for (int neuron = 0; neuron < HiddenSize; ++neuron) {
+    for (int neuron = 0; neuron < Model.hidden_size; ++neuron) {
         float activation = std::max(0.0F, hidden[neuron]);
         output += activation * Model.output_weights[neuron];
     }

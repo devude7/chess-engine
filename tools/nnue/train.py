@@ -15,7 +15,7 @@ WHITE_QUEENSIDE_CASTLING_INDEX = SIDE_TO_MOVE_INDEX + 2
 BLACK_KINGSIDE_CASTLING_INDEX = SIDE_TO_MOVE_INDEX + 3
 BLACK_QUEENSIDE_CASTLING_INDEX = SIDE_TO_MOVE_INDEX + 4
 INPUT_SIZE = PIECE_FEATURE_COUNT + 1 + 4
-HIDDEN_SIZE = 64
+HIDDEN_SIZE = 256
 SCORE_SCALE = 1000.0
 MAX_SCORE_CP = 1500
 
@@ -116,11 +116,11 @@ class PositionDataset(Dataset):
 
 
 class EvaluationNetwork(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, hidden_size=HIDDEN_SIZE):
         super().__init__()
 
-        self.hidden_layer = torch.nn.Linear(INPUT_SIZE, HIDDEN_SIZE)
-        self.output_layer = torch.nn.Linear(HIDDEN_SIZE, 1)
+        self.hidden_layer = torch.nn.Linear(INPUT_SIZE, hidden_size)
+        self.output_layer = torch.nn.Linear(hidden_size, 1)
 
     def forward(self, features):
         values = self.hidden_layer(features)
@@ -192,10 +192,11 @@ def main():
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("models/nnue/checkpoints/model_100k_castling.pt"),
+        default=Path("models/nnue/checkpoints/model_256.pt"),
     )
 
     parser.add_argument("--epochs", type=int, default=20)
+    parser.add_argument("--hidden-size", type=int, choices=(64, 256, 512), default=HIDDEN_SIZE)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--learning-rate", type=float, default=0.001)
     parser.add_argument("--validation-fraction", type=float, default=0.2)
@@ -239,7 +240,9 @@ def main():
 
     print(f"Device: {device}")
 
-    model = EvaluationNetwork().to(device)
+    model = EvaluationNetwork(args.hidden_size).to(device)
+    print(f"Architecture: {INPUT_SIZE} -> {args.hidden_size} -> 1")
+    print(f"Parameters: {sum(parameter.numel() for parameter in model.parameters())}")
 
     loss_function = torch.nn.SmoothL1Loss()
 
@@ -286,7 +289,7 @@ def main():
                 {
                     "model_state_dict": model.state_dict(),
                     "input_size": INPUT_SIZE,
-                    "hidden_size": HIDDEN_SIZE,
+                    "hidden_size": args.hidden_size,
                     "score_scale": SCORE_SCALE,
                     "max_score_cp": MAX_SCORE_CP,
                     "epoch": epoch,

@@ -31,24 +31,25 @@ void write_values(std::ostream& output, const std::vector<float>& values) {
     );
 }
 
-void write_test_model(int active_feature, float feature_weight, float output_bias) {
+void write_test_model(int active_feature, float feature_weight, float output_bias,
+                      int neuron_count = HiddenSize, int active_neuron = 0) {
     std::ofstream output(TestModelPath, std::ios::binary);
     std::array<char, 8> magic{
         'D', 'E', 'V', 'U', 'N', 'N', 'U', 'E'
     };
     std::uint32_t version = 1;
     std::uint32_t input_size = InputSize;
-    std::uint32_t hidden_size = HiddenSize;
+    std::uint32_t hidden_size = neuron_count;
     float score_scale = 1000.0F;
-    std::vector<float> hidden_weights(HiddenSize * InputSize, 0.0F);
-    std::vector<float> hidden_bias(HiddenSize, 0.0F);
-    std::vector<float> output_weights(HiddenSize, 0.0F);
+    std::vector<float> hidden_weights(neuron_count * InputSize, 0.0F);
+    std::vector<float> hidden_bias(neuron_count, 0.0F);
+    std::vector<float> output_weights(neuron_count, 0.0F);
 
     if (active_feature >= 0) {
-        hidden_weights[active_feature] = feature_weight;
+        hidden_weights[active_neuron * InputSize + active_feature] = feature_weight;
     }
 
-    output_weights[0] = 1.0F;
+    output_weights[active_neuron] = 1.0F;
 
     output.write(magic.data(), static_cast<std::streamsize>(magic.size()));
     write_value(output, version);
@@ -134,6 +135,45 @@ void test_evaluate_uses_nnue_only_when_enabled() {
     chess::unload_nnue();
 }
 
+void test_wider_models_use_last_neuron() {
+    chess::Board board = chess::board_from_fen(
+        "4k3/8/8/8/8/8/8/Q3K3 w - - 0 1"
+    );
+
+    for (int hidden_size : {64, 256, 512}) {
+        write_test_model(WhiteQueenA1Index, 0.3F, 0.125F,
+                         hidden_size, hidden_size - 1);
+        assert(chess::load_nnue(TestModelPath));
+        assert(chess::evaluate_nnue(board) == 425);
+
+        write_test_model(WhiteQueenA1Index, -0.3F, 0.125F,
+                         hidden_size, hidden_size - 1);
+        assert(chess::load_nnue(TestModelPath));
+        assert(chess::evaluate_nnue(board) == 125);
+    }
+    chess::unload_nnue();
+}
+
+void test_unsupported_width_preserves_loaded_model() {
+    chess::Board board = chess::board_from_fen(
+        "4k3/8/8/8/8/8/8/4K3 w - - 0 1"
+    );
+    write_test_model(-1, 0.0F, 0.125F, 256);
+    assert(chess::load_nnue(TestModelPath));
+
+    for (std::uint32_t hidden_size : {0U, 128U, 1024U}) {
+        std::fstream file(TestModelPath, std::ios::in | std::ios::out | std::ios::binary);
+        file.seekp(16);
+        write_value(file, hidden_size);
+        file.close();
+
+        assert(!chess::load_nnue(TestModelPath));
+        assert(chess::nnue_is_loaded());
+        assert(chess::evaluate_nnue(board) == 125);
+    }
+    chess::unload_nnue();
+}
+
 }
 
 int main() {
@@ -142,6 +182,8 @@ int main() {
     test_castling_feature_matches_python_encoding();
     test_piece_square_feature_matches_python_encoding();
     test_evaluate_uses_nnue_only_when_enabled();
+    test_wider_models_use_last_neuron();
+    test_unsupported_width_preserves_loaded_model();
 
     std::remove(TestModelPath);
     return 0;
