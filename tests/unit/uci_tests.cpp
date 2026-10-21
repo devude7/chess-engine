@@ -1,4 +1,6 @@
 #include <cassert>
+#include <cstdio>
+#include <fstream>
 #include <sstream>
 #include <string>
 
@@ -18,6 +20,9 @@ void test_uci_identifies_engine() {
     assert(text.find("id author devude") != std::string::npos);
     assert(text.find("option name UseNNUE type check default false") != std::string::npos);
     assert(text.find("option name EvalFile type string default <empty>") != std::string::npos);
+    assert(text.find("option name OwnBook type check default true") != std::string::npos);
+    assert(text.find("option name BookFile type string default <internal>") != std::string::npos);
+    assert(text.find("option name BookDepth type spin default 8 min 0 max 64") != std::string::npos);
     assert(text.find("uciok") != std::string::npos);
 }
 
@@ -62,7 +67,7 @@ void test_isready_returns_readyok() {
 }
 
 void test_go_depth_returns_bestmove() {
-    std::istringstream input("position startpos\ngo depth 1\nquit\n");
+    std::istringstream input("setoption name OwnBook value false\nposition startpos\ngo depth 1\nquit\n");
     std::ostringstream output;
 
     chess::run_uci_loop(input, output);
@@ -159,6 +164,57 @@ void test_go_clock_time_returns_bestmove() {
     assert(text.find("bestmove ") != std::string::npos);
 }
 
+void test_go_uses_book_and_newgame_keeps_it_enabled() {
+    std::istringstream input(
+        "position startpos\ngo depth 1\n"
+        "ucinewgame\nposition startpos moves e2e4\ngo depth 1\nquit\n"
+    );
+    std::ostringstream output;
+    chess::run_uci_loop(input, output);
+    auto text = output.str();
+    auto first = text.find("info string book move ");
+    assert(first != std::string::npos);
+    assert(text.find("info string book move ", first + 1) != std::string::npos);
+    assert(text.find("info depth ") == std::string::npos);
+}
+
+void test_book_miss_and_depth_limit_use_search() {
+    for (const auto& commands : {
+        "position startpos moves a2a3\ngo depth 1\nquit\n",
+        "setoption name BookDepth value 0\nposition startpos\ngo depth 1\nquit\n",
+        "setoption name BookDepth value 1\nposition startpos moves e2e4 e7e5\ngo depth 1\nquit\n"
+    }) {
+        std::istringstream input(commands);
+        std::ostringstream output;
+        chess::run_uci_loop(input, output);
+        assert(output.str().find("info string book move ") == std::string::npos);
+        assert(output.str().find("info depth 1") != std::string::npos);
+        assert(output.str().find("bestmove ") != std::string::npos);
+    }
+}
+
+void test_book_file_with_spaces_and_restore_internal_book() {
+    const char* path = "uci custom book.book";
+    {
+        std::ofstream file(path);
+        file << "b2b3 e7e5\n";
+    }
+    std::istringstream input(
+        "setoption name BookFile value uci custom book.book\n"
+        "position startpos\ngo depth 1\n"
+        "setoption name BookFile value <internal>\n"
+        "position startpos moves e2e4\ngo depth 1\nquit\n"
+    );
+    std::ostringstream output;
+    chess::run_uci_loop(input, output);
+    auto text = output.str();
+    assert(text.find("Opening book loaded: uci custom book.book") != std::string::npos);
+    assert(text.find("bestmove b2b3") != std::string::npos);
+    assert(text.find("Opening book loaded: <internal>") != std::string::npos);
+    assert(text.find("info depth ") == std::string::npos);
+    std::remove(path);
+}
+
 }
 
 int main() {
@@ -174,6 +230,9 @@ int main() {
     test_go_depth_outputs_principal_variation_line();
     test_go_movetime_returns_bestmove();
     test_go_clock_time_returns_bestmove();
+    test_go_uses_book_and_newgame_keeps_it_enabled();
+    test_book_miss_and_depth_limit_use_search();
+    test_book_file_with_spaces_and_restore_internal_book();
 
     return 0;
 }

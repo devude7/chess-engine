@@ -6,7 +6,12 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS books/default.book)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/books/default.book" DEFAULT_OPENING_BOOK)
+configure_file(src/book/default_book.hpp.in generated/chess/default_book.hpp @ONLY)
+
 add_library(chess_engine_core
+    src/book/opening_book.cpp
     src/core/color.cpp
     src/core/piece.cpp
     src/core/square.cpp
@@ -25,6 +30,8 @@ add_library(chess_engine_core
 )
 
 target_include_directories(chess_engine_core
+    PRIVATE
+        ${CMAKE_CURRENT_BINARY_DIR}/generated
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
@@ -160,6 +167,10 @@ target_link_libraries(uci_tests
 )
 
 add_test(NAME uci_tests COMMAND uci_tests)
+
+add_executable(opening_book_tests tests/unit/opening_book_tests.cpp)
+target_link_libraries(opening_book_tests PRIVATE chess_engine_core)
+add_test(NAME opening_book_tests COMMAND opening_book_tests)
 
 add_executable(perft_tests
     tests/perft/perft_tests.cpp

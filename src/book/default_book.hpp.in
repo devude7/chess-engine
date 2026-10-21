@@ -1,0 +1,7 @@
+#pragma once
+
+namespace chess {
+
+inline constexpr const char* DefaultOpeningBook = R"BOOK(@DEFAULT_OPENING_BOOK@)BOOK";
+
+}

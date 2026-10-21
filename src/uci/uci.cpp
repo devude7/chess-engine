@@ -1,5 +1,6 @@
 #include "chess/uci/uci.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <iostream>
@@ -8,6 +9,7 @@
 #include <vector>
 
 #include "chess/board/fen.hpp"
+#include "chess/book/opening_book.hpp"
 #include "chess/core/square.hpp"
 #include "chess/search/evaluation.hpp"
 #include "chess/search/nnue.hpp"
@@ -236,7 +238,40 @@ std::string value_from_setoption(const std::string& line, const std::string& nam
     return line.substr(prefix.size());
 }
 
-void apply_setoption(const std::string& line, std::ostream& output) {
+void apply_setoption(const std::string& line, std::ostream& output,
+                     OpeningBook& book, bool& own_book, int& book_depth) {
+    std::string own_book_value = value_from_setoption(line, "OwnBook");
+    if (!own_book_value.empty()) {
+        own_book = own_book_value == "true" || own_book_value == "1";
+        output << "info string Opening book " << (own_book ? "enabled" : "disabled") << '\n';
+        output.flush();
+        return;
+    }
+
+    std::string depth_value = value_from_setoption(line, "BookDepth");
+    if (!depth_value.empty()) {
+        int depth = 0;
+        if (parse_int(depth_value, depth) && depth >= 0 && depth <= 64) {
+            book_depth = depth;
+        }
+        return;
+    }
+
+    std::string book_file = value_from_setoption(line, "BookFile");
+    if (!book_file.empty()) {
+        if (book_file == "<internal>") {
+            book.load_default();
+            output << "info string Opening book loaded: <internal>\n";
+        } else if (book.load(book_file)) {
+            output << "info string Opening book loaded: " << book_file << '\n';
+        } else {
+            output << "info string Opening book failed to load: " << book_file
+                   << "; keeping previous book\n";
+        }
+        output.flush();
+        return;
+    }
+
     std::string use_nnue = value_from_setoption(line, "UseNNUE");
 
     if (!use_nnue.empty()) {
@@ -267,6 +302,9 @@ void run_uci_loop() {
 
 void run_uci_loop(std::istream& input, std::ostream& output) {
     PositionState state = start_position_state();
+    OpeningBook book;
+    bool own_book = true;
+    int book_depth = 8;
     std::string line;
 
     while (std::getline(input, line)) {
@@ -275,13 +313,16 @@ void run_uci_loop(std::istream& input, std::ostream& output) {
             output << "id author devude\n";
             output << "option name UseNNUE type check default false\n";
             output << "option name EvalFile type string default <empty>\n";
+            output << "option name OwnBook type check default true\n";
+            output << "option name BookFile type string default <internal>\n";
+            output << "option name BookDepth type spin default 8 min 0 max 64\n";
             output << "uciok\n";
             output.flush();
         } else if (line == "isready") {
             output << "readyok\n";
             output.flush();
         } else if (line.rfind("setoption", 0) == 0) {
-            apply_setoption(line, output);
+            apply_setoption(line, output, book, own_book, book_depth);
         } else if (line == "ucinewgame") {
             state = start_position_state();
         } else if (line.rfind("position", 0) == 0) {
@@ -293,6 +334,21 @@ void run_uci_loop(std::istream& input, std::ostream& output) {
                    << '\n';
             output.flush();
         } else if (line.rfind("go", 0) == 0) {
+            const auto words = split_words(line);
+            const auto has_word = [&words](const std::string& word) {
+                return std::find(words.begin(), words.end(), word) != words.end();
+            };
+            if (own_book && state.board.fullmove_number <= book_depth
+                && !has_word("infinite") && !has_word("ponder") && !has_word("searchmoves")) {
+                if (auto move = book.probe(state.board)) {
+                    const std::string text = move_to_uci(*move);
+                    output << "info string book move " << text << '\n';
+                    output << "bestmove " << text << '\n';
+                    output.flush();
+                    continue;
+                }
+            }
+
             GoOptions go_options = apply_clock_time(options_from_go_command(line), state.board.side_to_move);
             auto search_start_time = std::chrono::steady_clock::now();
             auto search_deadline = search_start_time + std::chrono::milliseconds(go_options.movetime_ms);
