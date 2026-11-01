@@ -1,0 +1,71 @@
+[Event "Engine comparison opening 01"]
+[Opening "Italian Game"]
+[Result "*"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. c3 Nf6 *
+
+[Event "Engine comparison opening 02"]
+[Opening "Ruy Lopez"]
+[Result "*"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 *
+
+[Event "Engine comparison opening 03"]
+[Opening "Scotch Game"]
+[Result "*"]
+
+1. e4 e5 2. Nf3 Nc6 3. d4 exd4 4. Nxd4 Nf6 *
+
+[Event "Engine comparison opening 04"]
+[Opening "Sicilian Defense"]
+[Result "*"]
+
+1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 *
+
+[Event "Engine comparison opening 05"]
+[Opening "French Defense"]
+[Result "*"]
+
+1. e4 e6 2. d4 d5 3. Nd2 Nf6 4. e5 Nfd7 *
+
+[Event "Engine comparison opening 06"]
+[Opening "Caro-Kann Defense"]
+[Result "*"]
+
+1. e4 c6 2. d4 d5 3. Nc3 dxe4 4. Nxe4 Nd7 *
+
+[Event "Engine comparison opening 07"]
+[Opening "Queen's Gambit Declined"]
+[Result "*"]
+
+1. d4 d5 2. c4 e6 3. Nc3 Nf6 4. Bg5 Be7 *
+
+[Event "Engine comparison opening 08"]
+[Opening "Semi-Slav Defense"]
+[Result "*"]
+
+1. d4 d5 2. c4 c6 3. Nf3 Nf6 4. Nc3 e6 *
+
+[Event "Engine comparison opening 09"]
+[Opening "King's Indian Defense"]
+[Result "*"]
+
+1. d4 Nf6 2. c4 g6 3. Nc3 Bg7 4. e4 d6 *
+
+[Event "Engine comparison opening 10"]
+[Opening "Nimzo-Indian Defense"]
+[Result "*"]
+
+1. d4 Nf6 2. c4 e6 3. Nc3 Bb4 4. e3 O-O *
+
+[Event "Engine comparison opening 11"]
+[Opening "English Opening"]
+[Result "*"]
+
+1. c4 e5 2. Nc3 Nf6 3. g3 Nc6 4. Bg2 Bc5 *
+
+[Event "Engine comparison opening 12"]
+[Opening "London System"]
+[Result "*"]
+
+1. d4 d5 2. Nf3 Nf6 3. Bf4 e6 4. e3 c5 *

@@ -67,3 +67,15 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+
+# NNUE training artifacts
+data/nnue/
+models/nnue/checkpoints/
+models/nnue/*.nnue
+tools/nnue/__pycache__/
+
+# python venv
+.venv
+
+# Large external PGN datasets
+tests/fixtures/lichess_db_*.pgn

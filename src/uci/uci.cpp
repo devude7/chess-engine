@@ -1,5 +1,6 @@
 #include "chess/uci/uci.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <iostream>
@@ -8,7 +9,10 @@
 #include <vector>
 
 #include "chess/board/fen.hpp"
+#include "chess/book/opening_book.hpp"
 #include "chess/core/square.hpp"
+#include "chess/search/evaluation.hpp"
+#include "chess/search/nnue.hpp"
 #include "chess/search/search.hpp"
 #include "chess/uci/uci_move.hpp"
 
@@ -224,6 +228,72 @@ GoOptions apply_clock_time(const GoOptions& options, Color side_to_move) {
     return updated_options;
 }
 
+std::string value_from_setoption(const std::string& line, const std::string& name) {
+    std::string prefix = "setoption name " + name + " value ";
+
+    if (line.rfind(prefix, 0) != 0) {
+        return "";
+    }
+
+    return line.substr(prefix.size());
+}
+
+void apply_setoption(const std::string& line, std::ostream& output,
+                     OpeningBook& book, bool& own_book, int& book_depth) {
+    std::string own_book_value = value_from_setoption(line, "OwnBook");
+    if (!own_book_value.empty()) {
+        own_book = own_book_value == "true" || own_book_value == "1";
+        output << "info string Opening book " << (own_book ? "enabled" : "disabled") << '\n';
+        output.flush();
+        return;
+    }
+
+    std::string depth_value = value_from_setoption(line, "BookDepth");
+    if (!depth_value.empty()) {
+        int depth = 0;
+        if (parse_int(depth_value, depth) && depth >= 0 && depth <= 64) {
+            book_depth = depth;
+        }
+        return;
+    }
+
+    std::string book_file = value_from_setoption(line, "BookFile");
+    if (!book_file.empty()) {
+        if (book_file == "<internal>") {
+            book.load_default();
+            output << "info string Opening book loaded: <internal>\n";
+        } else if (book.load(book_file)) {
+            output << "info string Opening book loaded: " << book_file << '\n';
+        } else {
+            output << "info string Opening book failed to load: " << book_file
+                   << "; keeping previous book\n";
+        }
+        output.flush();
+        return;
+    }
+
+    std::string use_nnue = value_from_setoption(line, "UseNNUE");
+
+    if (!use_nnue.empty()) {
+        bool enabled = use_nnue == "true" || use_nnue == "1";
+        set_nnue_enabled(enabled);
+        output << "info string NNUE "
+               << (enabled ? "enabled" : "disabled") << '\n';
+        output.flush();
+        return;
+    }
+
+    std::string eval_file = value_from_setoption(line, "EvalFile");
+
+    if (!eval_file.empty()) {
+        bool loaded = load_nnue(eval_file);
+        output << "info string NNUE weights "
+               << (loaded ? "loaded" : "failed to load")
+               << ": " << eval_file << '\n';
+        output.flush();
+    }
+}
+
 }
 
 void run_uci_loop() {
@@ -232,22 +302,53 @@ void run_uci_loop() {
 
 void run_uci_loop(std::istream& input, std::ostream& output) {
     PositionState state = start_position_state();
+    OpeningBook book;
+    bool own_book = true;
+    int book_depth = 8;
     std::string line;
 
     while (std::getline(input, line)) {
         if (line == "uci") {
             output << "id name devuChess\n";
             output << "id author devude\n";
+            output << "option name UseNNUE type check default false\n";
+            output << "option name EvalFile type string default <empty>\n";
+            output << "option name OwnBook type check default true\n";
+            output << "option name BookFile type string default <internal>\n";
+            output << "option name BookDepth type spin default 8 min 0 max 64\n";
             output << "uciok\n";
             output.flush();
         } else if (line == "isready") {
             output << "readyok\n";
             output.flush();
+        } else if (line.rfind("setoption", 0) == 0) {
+            apply_setoption(line, output, book, own_book, book_depth);
         } else if (line == "ucinewgame") {
             state = start_position_state();
         } else if (line.rfind("position", 0) == 0) {
             state = position_state_from_command(line, state);
+        } else if (line == "eval") {
+            bool using_nnue = nnue_is_enabled() && nnue_is_loaded();
+            output << "info string eval cp " << evaluate(state.board)
+                   << " source " << (using_nnue ? "nnue" : "classical")
+                   << '\n';
+            output.flush();
         } else if (line.rfind("go", 0) == 0) {
+            const auto words = split_words(line);
+            const auto has_word = [&words](const std::string& word) {
+                return std::find(words.begin(), words.end(), word) != words.end();
+            };
+            if (own_book && state.board.fullmove_number <= book_depth
+                && !has_word("infinite") && !has_word("ponder") && !has_word("searchmoves")) {
+                if (auto move = book.probe(state.board)) {
+                    const std::string text = move_to_uci(*move);
+                    output << "info string book move " << text << '\n';
+                    output << "bestmove " << text << '\n';
+                    output.flush();
+                    continue;
+                }
+            }
+
             GoOptions go_options = apply_clock_time(options_from_go_command(line), state.board.side_to_move);
             auto search_start_time = std::chrono::steady_clock::now();
             auto search_deadline = search_start_time + std::chrono::milliseconds(go_options.movetime_ms);
