@@ -45,6 +45,10 @@ and license shared adaptations under CC BY-SA 4.0 or a compatible license.
 
 Training is done in Python with PyTorch.
 
+NNUE provides a learned static evaluation of a chess position. When a model is
+loaded and `UseNNUE=true`, each call to `evaluate()` uses the network in place
+of classical evaluation. Negamax uses these scores to compare searched variations.
+
 Default network: `773 inputs -> 256 hidden neurons (ReLU) -> 1 evaluation output`.
 
 `tools/nnue/train.py` trains the network and saves the best validation
@@ -57,3 +61,10 @@ Enable the exported model through UCI; paths are relative to the engine's workin
 setoption name EvalFile value models/nnue/devuchess_256.nnue
 setoption name UseNNUE value true
 ```
+
+## Conclusion
+
+In local test games, classical evaluation performed better overall, winning
+roughly 15-5, although NNUE won some games. This is a preliminary comparison;
+more training and further improvements to the NNUE implementation may lead to
+better results.
